@@ -1,12 +1,14 @@
+from __future__ import annotations
 from typing import Protocol, Optional, Tuple, Callable
 from jax import Array
 
-from gaussed.gp.kernels import Kernel
+from gaussed.gp.kernels.base import Kernel
 from gaussed.gp.means import MeanFunction
-from gaussed.linops.base import LinearOperator
+from gaussed.engines.linops import LinearOperator
+from gaussed.domains.base import Domain
 
-class GPOperator(Protocol):
-    """Linear operator L acting on functions f: ℝ^d→ℝ."""
+class Operator(Protocol):
+    """operator L acting on functions f: ℝ^d→ℝ."""
     name: str
     # Apply to mean function: x ↦ (L m)(x)
     def apply_mean(self, mean: MeanFunction) -> MeanFunction: ...
@@ -20,14 +22,10 @@ class GPOperator(Protocol):
     def act_on_feature_map(self, phi: Callable[[Array], Array]) -> Callable[[Array], Array]: ...
 
 
-class GPProbe(Protocol):
-    m: int  # number of outputs
+class Probe(Protocol):
+    """Batch of linear functionals L_i, i=1..n. Knows how to act on k(x,y)."""
+    def n(self) -> int: ...
+    def mean(self, mean_fn: MeanFunction) -> Array: ...
+    def K_with(self, other: "Probe", kernel: "Kernel", domain: Domain) -> Array: ...
 
-    # default/kernel backend path (works with no basis)
-    def apply_mean(self, mean: MeanFunction) -> Array: ...
-    def cov_with(self, other: "GPProbe", kernel: Kernel) -> Array: ...
-    def cross_with_points(self, X: Array, kernel: Kernel) -> Array: ...
-
-    # adapters for basis/feature backends
-    def to_basis(self, basis) -> "LinearOperator": ...        # P: R^n -> R^m
-    def to_features(self, phi: Callable[[Array], Array]) -> Array: ...  # A ∈ R^{m×M}
+    def _K_as_rhs_from_eval(self, X: Array, kernel: Kernel, domain: Domain) -> Array: ...
