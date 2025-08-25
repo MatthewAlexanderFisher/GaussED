@@ -1,6 +1,6 @@
-# experiment large files
+# egg info
 
-experiments/fig6_experiment/results/*.csv
+*.egg-info/
 
 
 # Byte-compiled / optimized / DLL files
