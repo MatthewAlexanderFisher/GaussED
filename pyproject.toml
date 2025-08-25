@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaussed"
+version = "0.2.0"
+description = "GaussED: A Probabilistic Programming Language for Sequential Experimental Design"
+authors = [
+    { name="Matthew Fisher", email="matthew.fisher@newcastle.ac.uk" }
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "jax==0.6.0",
+    "pyyaml==6.0.2"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black==25.1.0", 
+    "tensorboard==2.19.0"
+]
+docs = [
+    "sphinx", 
+    "sphinx-autodoc-typehints", 
+    "sphinx-rtd-theme",
+    "sphinxcontrib-bibtex==2.6.3",
+    "furo"
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
