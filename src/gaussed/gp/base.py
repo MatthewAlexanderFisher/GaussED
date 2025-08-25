@@ -34,16 +34,6 @@ class GP:
         B = self._as_probe(B)
         return A.K_with(B, self.kernel, self.domain)
 
-    # Conditioning is GP-API specific - Likelihoods (e.g. noise via Gaussian) are handled via the backend call,
-    def condition(self, F: ProbeLike, y: Array, *, backend: "Backend", noise: Any) -> "PosteriorGP":
-        F = self._as_probe(F)
-        K_FF = self.K(F, F)              # (nF, nF)
-        mu_F = F.mean(self.mean)         # (nF,)
-        cond = backend.condition(K_FF, noise)   # backend interprets `noise` (e.g., NoiseSpec)
-        alpha = cond.solve(y - mu_F)     # (nF,)
-        return PosteriorGP(self, F, cond, alpha)
-
-
     def tree_flatten(self):
         # domain, codomain, kernel are leaves, no aux
         return (self.domain, self.codomain, self.mean, self.kernel), None
@@ -90,14 +80,15 @@ class PosteriorGP:
         K_QQp = Q.K_with(Qp, self.prior.kernel, self.prior.domain)        # (nQ, nQp)
         return K_QQp - K_QF @ V
 
-    def sample(self, key, Q: Probe, n: int = 1) -> Array:
+    def sample(self, key: Array, Q: Probe, n: int = 1) -> Tuple[Array, Array]:
         # Exact posterior sampling with Cholesky backend
         # 1) draw eps ~ N(0, I), map via L_Q: L_Q L_Q^T = cov(Q,Q)
         # 2) add mean
+        key, subkey = jax.random.split(key)
         K = self.cov(Q, Q)                            # (nQ, nQ)
         L = jnp.linalg.cholesky(K + 1e-6*jnp.eye(K.shape[0], K.dtype))
-        eps = jax.random.normal(key, (n, K.shape[0]))
-        return self.mean(Q)[None, :] + eps @ L.T
+        eps = jax.random.normal(subkey, (n, K.shape[0]))
+        return key, self.mean(Q)[None, :] + eps @ L.T
 
     def variance(self, Q: ProbeLike) -> Array:
         Q = self.prior._as_probe(Q)

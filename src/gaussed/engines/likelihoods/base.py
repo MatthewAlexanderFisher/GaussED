@@ -3,7 +3,6 @@ from typing import Protocol, Callable, Optional, Tuple
 from dataclasses import dataclass
 import jax, jax.numpy as jnp
 from jax import Array
-from typing_extensions import Protocol
 
 from gaussed.gp.gp_ops.base import Probe
 from gaussed.types import ProbeLike

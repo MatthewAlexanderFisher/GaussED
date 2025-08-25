@@ -11,12 +11,12 @@ from gaussed.utils.constraints import Positive, Transform
 @jax.tree_util.register_pytree_node_class
 @dataclass
 class MaternParams:
-    raw_ell: Array
-    raw_sigma2: Array
+    lengthscale: Array
+    amplitude: Array
     nu: float
 
     def tree_flatten(self):
-        return (self.raw_ell, self.raw_sigma2), (self.nu,)
+        return (self.lengthscale, self.amplitude), (self.nu,)
     
     @classmethod
     def tree_unflatten(cls, aux, ch):
@@ -27,7 +27,7 @@ class MaternParams:
     @classmethod
     def axes(cls, ell_axis, s2_axis, *, nu: float):
         obj = object.__new__(cls)
-        obj.raw_ell = ell_axis; obj.raw_sigma2 = s2_axis; obj.nu = nu
+        obj.lengthscale = ell_axis; obj.amplitude = s2_axis; obj.nu = nu
         return obj
 
 @jax.tree_util.register_pytree_node_class
@@ -39,8 +39,8 @@ class MaternKernel:
 
     def __call__(self, x, y, domain):
 
-        ell = self.ell_transform.forward(self.params.raw_ell)
-        s2  = self.sigma2_transform.forward(self.params.raw_sigma2)
+        ell = self.ell_transform.forward(self.params.lengthscale)
+        s2  = self.sigma2_transform.forward(self.params.amplitude)
 
         r = domain.pairwise_geometry(x, y) / ell
         nu = self.params.nu

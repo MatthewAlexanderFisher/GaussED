@@ -4,10 +4,8 @@ from dataclasses import dataclass
 from jax import Array
 import jax
 
-from gaussed.gp.base import GP
 from gaussed.gp.gp_ops.base import Operator, Probe
-from gaussed.engines.linops.base import LinearOperator
-from gaussed.gp.backends.noise import NoiseSpec
+from gaussed.engines.linops import LinearOp
 
 # Base Conditioner
 class Conditioner(Protocol):
@@ -21,4 +19,4 @@ class Conditioner(Protocol):
 # Base Backend
 class Backend(Protocol):
     name: str
-    def condition(self, K_FF: Array, noise: "NoiseSpec") -> Conditioner: ...
+    def condition(self, K_FF: LinearOp) -> Conditioner: ...

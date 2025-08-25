@@ -22,7 +22,7 @@ class GPModel:
         K_FF = self.gp.K(F, F)
         mu_F = F.mean(self.gp.mean)
         if isinstance(self.likelihood, GaussianLikelihood):
-            Sigma = self.likelihood.Sigma_for(F, dtype=K_FF.dtype)
+            Sigma = jnp.asarray(self.likelihood.Sigma_for(F, dtype=K_FF.dtype))
             cond = backend.condition(K_FF, Sigma)
             alpha = cond.solve(y - mu_F)
             return PosteriorGP(self.gp, F, cond, alpha)

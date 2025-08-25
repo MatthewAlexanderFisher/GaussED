@@ -9,27 +9,28 @@ from jax import Array
 @jax.tree_util.register_pytree_node_class
 @dataclass(init=False)
 class LinearOp:
-    shape: Tuple[int, int]
+    _shape: Tuple[int, ...]
     # Core
     _mv: Callable[[Array], Array]                # v -> A v
     _rmv: Optional[Callable[[Array], Array]] = None  # v -> A^T v (optional)
     _to_dense: Optional[Callable[[], Array]] = None
 
-    def __init__(self, shape, mv, rmv=None, to_dense=None):
-        self.shape = shape
+    def __init__(self, shape: Tuple[int, ...], mv, rmv=None, to_dense=None):
+        self._shape = shape
         self._mv = mv
         self._rmv = rmv
         self._to_dense = to_dense
 
     # Public API
     def mv(self, v: Array) -> Array: return self._mv(v)
-    
+
     def rmv(self, v: Array) -> Array:
         if self._rmv is None:
             # symmetric fallback if square
-            assert self.shape[0] == self.shape[1], "rmv requires square or explicit rmv"
+            assert self._shape[0] == self._shape[1], "rmv requires square or explicit rmv"
             return self._mv(v)
         return self._rmv(v)
+    
     def matmul(self, X: Array) -> Array:  # A @ X
         return jax.vmap(self._mv, in_axes=1, out_axes=1)(X)
 
@@ -44,12 +45,26 @@ class LinearOp:
     # PyTree
     def tree_flatten(self):
         # functions are static (aux); nothing differentiable by default
-        return (), (self.shape, self._mv, self._rmv, self._to_dense)
+        return (), (self._shape, self._mv, self._rmv, self._to_dense)
+
     @classmethod
     def tree_unflatten(cls, aux, ch):
         shape, mv, rmv, to_dense = aux
         return cls(shape, mv, rmv, to_dense)
 
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        return self._shape
+
+    @property
+    def T(self) -> LinearOp:
+        # Transpose operator: swaps matvec<->rmatvec
+        if self._rmv is None:
+            # symmetric fallback if square
+            assert self._shape[0] == self._shape[1], "rmv requires square or explicit rmv"
+            return LinearOp(self._mv, self._mv, self._shape[::-1])
+        else:
+            return LinearOp(self._rmv, self._mv, self._shape[::-1])
 
 # Convenience constructors
 def DenseOp(A: Array) -> LinearOp:

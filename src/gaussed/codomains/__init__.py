@@ -1,0 +1,1 @@
+from gaussed.codomains.base import Codomain

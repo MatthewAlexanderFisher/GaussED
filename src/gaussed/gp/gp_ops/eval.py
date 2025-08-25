@@ -6,7 +6,6 @@ import jax
 
 from gaussed.gp.kernels.base import Kernel
 from gaussed.gp.means import MeanFunction
-from gaussed.engines.linops import LinearOperator
 from gaussed.domains.base import Domain
 from gaussed.gp.gp_ops.base import Operator, Probe
 

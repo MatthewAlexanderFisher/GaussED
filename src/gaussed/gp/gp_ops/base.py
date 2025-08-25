@@ -4,7 +4,7 @@ from jax import Array
 
 from gaussed.gp.kernels.base import Kernel
 from gaussed.gp.means import MeanFunction
-from gaussed.engines.linops import LinearOperator
+from gaussed.engines.linops import LinearOp
 from gaussed.domains.base import Domain
 
 class Operator(Protocol):
@@ -18,7 +18,7 @@ class Operator(Protocol):
     def apply_kernel_left(self, kernel: Kernel) -> Kernel:  ...   # (L_x K)(x,x')
     def apply_kernel_right(self, kernel: Kernel) -> Kernel: ...   # (L_{x'} K)(x,x')
 
-    def to_basis(self, basis) -> "LinearOperator": ...
+    def to_basis(self, basis) -> "LinearOp": ...
     def act_on_feature_map(self, phi: Callable[[Array], Array]) -> Callable[[Array], Array]: ...
 
 
