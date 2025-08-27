@@ -60,7 +60,7 @@ class TriLPositive(Transform):
         d = self.dim
         n = d*(d+1)//2
         assert x.shape[-1] == n
-        L = jnp.zeros((*x.shape[:-1], d, d), dtype=u.dtype)
+        L = jnp.zeros((*x.shape[:-1], d, d), dtype=x.dtype)
         idx = 0
         for i in range(d):
             # fill row i, cols 0..i
@@ -80,7 +80,7 @@ class TriLPositive(Transform):
         parts = [L[..., i, :i+1] for i in range(d)]
         return jnp.concatenate(parts, axis=-1)
 
-    def log_abs_det_jacobian_to_SPD(self, x: Array) -> Array:
+    def log_abs_det_jacobian(self, x: Array) -> Array:
         """log|∂Σ/∂u| where Σ = L(u) L(u)^T."""
         d = self.dim
         # grab diag_raw entries from u: positions idx+i in the packing loop

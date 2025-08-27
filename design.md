@@ -78,7 +78,7 @@ Gaussian Processes in GaussED are defined with explicit separation of components
 ```python
 GP(
     mean: MeanFunction,
-    kernel: Kernel,
+    kernel: Kernel
     domain: Domain,
     codomain: Codomain,
     backend: Backend
@@ -90,26 +90,45 @@ GP(
 
 This modular design makes it possible to extend GPs with new operators, domains, or codomains without altering inference logic.
 
----
+### GP Representations
 
-## Backends
+GaussED currently supports three types of GP inference:
 
-GaussED currently supports three types of inference backends:
-
-1. **Kernel-based backend**
+1. **Kernel-based Representation**
 
    * Uses the full covariance kernel for exact GP inference.
    * Suitable for small- to medium-scale problems.
 
-2. **Inducing points backend**
+2. **Inducing points Representation**
 
    * Sparse GP approximation via inducing points.
    * Enables scaling to large datasets.
 
-3. **Operator / Basis-function backend**
+3. **Operator / Basis-function Representation**
 
    * Interprets the GP as Bayesian linear regression in a basis-function space.
    * Useful for specialised applications where an operator structure is known.
+
+These representations are automatically inferred from the choice of `Backend`.
+
+
+---
+
+## Linear Operators and Conditioning
+
+Applying linear functionals to Gaussian processes is handled via the `Probe` interface. A `Probe` object interfaces with a GP to compute a linear functional $L$ applied to a GP ($L f$). For each probe, only an `apply(f: Func, ctx) -> LinearOp` method must be provided.
+
+Depending on the GP representation, we:
+
+1. **Kernel-based and Inducing Points Representation:** Any cross covariance $K(A,B)$ is computed via nested applications $$ K(A,B) = A\cdot (X \mapsto B\cdot(Y\mapsto k(X,Y))) $$
+2. **Basis-Function:** A cross covariance is computed as $\Phi^\top \Phi$ which is achieved via an `apply` to `BasisMap.phi`.
+
+---
+## Backends
+
+A `Backend` is the *glue* that connects explicit numerical computations, the choice of GP numerics and computing Posterior GPs.
+
+ A `Backend` contains a `Solver` object/
 
 At the **user level**, the API remains simple:
 

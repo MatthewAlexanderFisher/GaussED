@@ -5,14 +5,15 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from gaussed.engines.backends.base import Backend
+from gaussed.backends.base import Backend
 from gaussed.gp.kernels.base import Kernel
 from gaussed.gp.means import MeanFunction
 from gaussed.domains.base import Domain
 from gaussed.codomains.base import Codomain
-from gaussed.gp.gp_ops import Probe, Eval
-from gaussed.engines.backends.base import Conditioner
+from gaussed.gp.gp_ops.base import Probe, OpContext
+from gaussed.backends import Backend
 from gaussed.types import ProbeLike
+from gaussed.gp.gp_ops.point_eval import Eval
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(init=False)
@@ -21,12 +22,15 @@ class GP:
     codomain: Codomain
     mean: MeanFunction
     kernel: Kernel
+    backend: Backend
+    op_ctx: Optional[OpContext] = None  # user can set/override
 
-    def __init__(self, domain: Domain, codomain: Codomain, mean: MeanFunction, kernel: Kernel):
+    def __init__(self, domain: Domain, codomain: Codomain, mean: MeanFunction, kernel: Kernel, backend: Backend):
         self.domain = domain
         self.codomain = codomain
         self.mean = mean
         self.kernel = kernel
+        self.backend = backend
 
     # --- covariance blocks via probes ---
     def K(self, A: ProbeLike, B: ProbeLike) -> Array:
@@ -42,7 +46,6 @@ class GP:
     def tree_unflatten(cls, aux, children):
         dom, cod, mean, ker = children
         return cls(dom, cod, mean, ker)
-
 
     @classmethod
     def axes(cls, dom_axis, cod_axis, mean_axis, ker_axis):

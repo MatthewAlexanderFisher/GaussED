@@ -2,16 +2,17 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 from jax import Array
-from gaussed.engines.backends.solvers.base import Solver, Factor, as_linear_op
-from gaussed.engines.linops import LinearOp
+
+from gaussed.backends.solvers.base import Solver, Factor
+from gaussed.linops import LinearOp, AsLinearOp
 
 @dataclass
 class CholFactor(Factor):
     L: Array
     _dtype: Array
 
-    def solve(self, rhs: Array) -> Array:
-        return jax.scipy.linalg.cho_solve((self.L, True), rhs)
+    def solve(self, u: Array) -> Array:
+        return jax.scipy.linalg.cho_solve((self.L, True), u)
     
     def solve_blocks(self, B: Array) -> Array:
         return jax.scipy.linalg.cho_solve((self.L, True), B)
@@ -27,7 +28,7 @@ class CholeskySolver(Solver):
     jitter: float = 1e-6
     def factor(self, A: Array | LinearOp) -> Factor:
         # If given an op, densify once here
-        op = as_linear_op(A)
+        op = AsLinearOp(A)
         M = op.to_dense()
         n = M.shape[0]
         L = jnp.linalg.cholesky(M + self.jitter * jnp.eye(n, dtype=M.dtype))

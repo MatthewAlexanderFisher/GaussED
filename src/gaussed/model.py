@@ -6,10 +6,9 @@ import jax.numpy as jnp
 from jax import Array
 
 from gaussed.gp.base import GP, PosteriorGP
-from gaussed.gp.gp_ops import Probe, Eval
-from gaussed.engines.backends.base import Backend, Conditioner
-from gaussed.engines.likelihood.base import Likelihood
-from gaussed.engines.likelihood.gaussian import GaussianLikelihood
+from gaussed.backends import Backend
+from gaussed.engines.likelihoods.base import Likelihood
+from gaussed.engines.likelihoods.gaussian import GaussianLikelihood
 from gaussed.types import ProbeLike
 
 @dataclass

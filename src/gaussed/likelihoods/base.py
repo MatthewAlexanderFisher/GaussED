@@ -7,8 +7,7 @@ from jax import Array
 from gaussed.gp.gp_ops.base import Probe
 from gaussed.types import ProbeLike
 from gaussed.gp.base import GP, PosteriorGP
-from gaussed.engines.backends.base import Backend
-from gaussed.engines.linops import LinearOp
+from gaussed.linops import LinearOp
 
 class Likelihood(Protocol):
     def op_for(self, F: Probe, dtype) -> LinearOp: ...
@@ -18,5 +17,5 @@ class Likelihood(Protocol):
     def Sigma_for(self, F: Probe, dtype) -> Array: ...
     def add_to_gram(self, K_FF: Array, F: Probe) -> Array: ...
 
-    def laplace_or_ep_condition(self, gp: GP, F: ProbeLike, y: Array, backend: Backend) -> PosteriorGP:
+    def laplace_or_ep_condition(self, gp: GP, F: ProbeLike, y: Array) -> PosteriorGP:
         ...

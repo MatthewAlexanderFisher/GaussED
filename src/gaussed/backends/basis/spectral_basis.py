@@ -3,11 +3,6 @@ from typing import Callable, Optional, Tuple, Any
 from jax import Array
 import jax.numpy as jnp
 
-from gaussed.gp.base import GP, PosteriorGP
-from gaussed.gp.gp_ops import Probe
-from gaussed.gp.base import PosteriorGP
-from gaussed.engines.backends.solvers.base import Solver
-
 @dataclass
 class LaplaceBasis:
     """
@@ -20,7 +15,7 @@ class LaplaceBasis:
     via `diff_basis_func_gen(order)` below.
     """
     dim: int
-    b: Array = jnp.pi
+    b: float = jnp.pi
     c: Array | float = 0.0
     dims: Optional[Tuple[int, ...]] = None  # subset of input dims, default all
 

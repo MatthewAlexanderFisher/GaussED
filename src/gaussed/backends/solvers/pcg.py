@@ -5,26 +5,34 @@ import jax.numpy as jnp
 from jax import Array
 import jax
 
-from gaussed.engines.backends.solvers.base import Solver, Factor, as_linear_op
-from gaussed.engines.linops import LinearOp, IdentityOp
+from gaussed.backends.solvers.base import Solver, Factor
+from gaussed.linops import LinearOp, IdentityOp, AsLinearOp
 
 @dataclass
 class PCGFactor(Factor):
     A: LinearOp
     _dtype: Array
-    M: Optional[LinearOp] = None   # preconditioner (approx inv)
-    tol: float = 1e-6
+    M_inv: Optional[LinearOp] = None   # preconditioner (approx inv)
+    rtol: float = 1e-6
+    atol: float = 1e-6
     maxit: int = 512
 
-    def solve(self, rhs: Array) -> Array:
+    def solve(self, u: Array) -> Array:
         # plug any CG/PCG implementation you like
-        return pcg(self.A.mv, rhs, self.M.mv if self.M else None, self.tol, self.maxit)
+        return pcg(self.A.mv,
+                    u,
+                    M_inv=self.M_inv,
+                    rtol=self.rtol,
+                    atol=self.atol,
+                    maxiter=self.maxit
+                    )
+
     def solve_blocks(self, B: Array) -> Array:
         # solve each column
         return jax.vmap(self.solve, in_axes=1, out_axes=1)(B)
     
-    def logdet(self):
-        return None  # use SLQ if needed
+    def logdet(self) -> Array:
+        raise NotImplementedError("logdet not implemented for PCGFactor")
     
     def dtype(self) -> Array: 
         return self._dtype
@@ -36,7 +44,7 @@ class PCGSolver(Solver):
     maxit: int = 512
 
     def factor(self, A: Array | LinearOp) -> Factor:
-        op = as_linear_op(A)
+        op = AsLinearOp(A)
         return PCGFactor(op, op.to_dense().dtype, self.precond, self.tol, self.maxit)
 
 
@@ -51,7 +59,7 @@ def pcg(
     M_inv: Optional[LinearOp] = None,
     x0: Optional[Array] = None,
     return_metrics: bool = False
-) -> Tuple[Array, Dict] | Tuple[LinearOp, Array]:
+) -> Tuple[Array, Dict] | Array:
     r"""
     Solve the symmetric system :math:`Ax = b` using Preconditioned Conjugate Gradient (PCG),
     optionally tracking residuals.
