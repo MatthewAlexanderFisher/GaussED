@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax
 
 from gaussed.gp.gp_ops.base import FunSpec, KernelSpec, OpContext, Functional
-from gaussed.backends.solvers.base import Quadrature
+from gaussed.backends.solvers.quadrature import Quadrature
 from gaussed.domains.base import Domain 
 
 from typing import Optional, Callable

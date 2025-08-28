@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import jax, jax.numpy as jnp
 from jax import Array
 
-from gaussed.gp.gp_ops.base import Probe
+from gaussed.gp.gp_ops.probe import Probe
 from gaussed.types import ProbeLike
 from gaussed.gp.base import GP, PosteriorGP
 from gaussed.linops import LinearOp

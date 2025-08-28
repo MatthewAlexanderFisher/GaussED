@@ -5,8 +5,9 @@ from jax import Array
 
 
 from gaussed.gp.kernels.base import Kernel
+from gaussed.gp.means import MeanFun
 from gaussed.domains.base import Domain
-from gaussed.gp.gp_ops.base import KernelSpec
+from gaussed.gp.gp_ops.base import KernelSpec, FunSpec
 
 
 def make_kernel_spec(
@@ -16,7 +17,7 @@ def make_kernel_spec(
     def k0(X: Array, Y: Array) -> Array:
         return kernel(X, Y, domain)
 
-    # Pass through factories if present; they already return Optional
+    # Pass through factories if present; integrate methods return Optional
     ix_of  = getattr(kernel, "integrate_x_of", None)
     iy_of  = getattr(kernel, "integrate_y_of", None)
     ixy_of = getattr(kernel, "integrate_xy_of", None)
@@ -37,4 +38,26 @@ def make_kernel_spec(
         integrate_y_of=iy_of,
         integrate_xy_of=ixy_of,
         d_dx=d_dx, d_dy=d_dy, d2_xx=d2_xx, d2_yy=d2_yy, d2_xy=d2_xy,
+    )
+
+
+def make_fun_spec(
+    mean: MeanFun,                   
+    domain: Domain,
+) -> FunSpec:
+    def eval(X: Array) -> Array:
+        return mean(X, domain)
+
+    # Pass through factories if present; integrate method returns Optional
+    ix_of  = getattr(mean, "integrate", None)
+
+    # Derivatives already bound to base `domain` inside MeanFunc methods (if any)
+    partial  = getattr(mean, "partial", None)
+    partial2  = getattr(mean, "partial2", None)
+
+    return FunSpec(
+        eval=eval,
+        integrate=ix_of,
+        partial=partial,
+        partial2=partial2,
     )

@@ -5,7 +5,8 @@ from jax import Array
 import jax
 import jax.numpy as jnp
 
-from gaussed.gp.gp_ops.base import KernelSpec, FunSpec, OpContext, Probe
+from gaussed.gp.gp_ops.base import KernelSpec, FunSpec, OpContext
+from gaussed.gp.gp_ops.probe import Probe
 from gaussed.linops import LinearOp
 from gaussed.types import LinearLike
 
@@ -23,7 +24,6 @@ class BasisRep:
         return F.apply(self.phi_spec, ctx)   # (n, m)
 
     def gram(self, F: Probe, G: Probe, ctx: OpContext) -> LinearLike:
-        # Only F==G used for training systems; for general cross you can materialise both
         if F is G:
             D = self._design(F, ctx)                             # (n, m)
             n, m = D.shape
@@ -32,7 +32,7 @@ class BasisRep:
                 z = D.T @ v
                 z = Lam * z if jnp.ndim(Lam)==0 else Lam @ z
                 return D @ z
-            return LinearOp((n, n), mv)
+            return LinearOp((n, n), mv = mv)
         # cross: dense block
         DF = self._design(F, ctx); DG = self._design(G, ctx)
         Lam = self.Lambda

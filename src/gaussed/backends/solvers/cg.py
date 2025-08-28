@@ -5,47 +5,40 @@ import jax.numpy as jnp
 from jax import Array
 import jax
 
-from gaussed.backends.solvers.base import Solver, Factor
+from gaussed.backends.solvers.linear_solver import LinearSolver, SolveFn, LinearSolverState, SqrtFn, LogdetFn
 from gaussed.linops import LinearOp, IdentityOp, AsLinearOp
+from gaussed.types import LinearLike
 
-@dataclass
-class PCGFactor(Factor):
-    A: LinearOp
-    _dtype: Array
-    M_inv: Optional[LinearOp] = None   # preconditioner (approx inv)
-    rtol: float = 1e-6
-    atol: float = 1e-6
-    maxit: int = 512
+# ===== CG cache (warm start + preconditioner) =====
 
-    def solve(self, u: Array) -> Array:
-        # plug any CG/PCG implementation you like
-        return pcg(self.A.mv,
-                    u,
-                    M_inv=self.M_inv,
-                    rtol=self.rtol,
-                    atol=self.atol,
-                    maxiter=self.maxit
-                    )
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class CGCache:
+    x0: Optional[Array] = None  # warm start (n,) or (n,k)
 
-    def solve_blocks(self, B: Array) -> Array:
-        # solve each column
-        return jax.vmap(self.solve, in_axes=1, out_axes=1)(B)
-    
-    def logdet(self) -> Array:
-        raise NotImplementedError("logdet not implemented for PCGFactor")
-    
-    def dtype(self) -> Array: 
-        return self._dtype
+    # TODO: Make the preconditioner cache usable
+    M: Optional[LinearLike] = None    # preconditioner (n,n) or (n,k)
 
-@dataclass
-class PCGSolver(Solver):
-    precond: Optional[LinearOp] = None
-    tol: float = 1e-6
-    maxit: int = 512
+    def tree_flatten(self):
+        return (self.x0, self.M), ()
+    @classmethod
+    def tree_unflatten(cls, aux, children):
+        (x0, M) = children
+        return cls(x0, M)
 
-    def factor(self, A: Array | LinearOp) -> Factor:
-        op = AsLinearOp(A)
-        return PCGFactor(op, op.to_dense().dtype, self.precond, self.tol, self.maxit)
+# ===== Block-append update SVD (Brand algorithm) =====
+
+def cg_solve_hook(tol: float = 1e-6, maxiter: int = 200, M: Optional[LinearLike] = None) -> SolveFn:
+    Mop = None if M is None else AsLinearOp(M)
+    Mmv = None if Mop is None else Mop.mv
+    def _solve(op: LinearOp, rhs: Array, st: LinearSolverState):
+        cache = st.cache if isinstance(st.cache, CGCache) else CGCache(None)
+        x0 = cache.x0
+        mv = op.mv
+        x, _ = jax.scipy.sparse.linalg.cg(mv, rhs, tol=tol, maxiter=maxiter, M=Mmv, x0=x0)
+        # store warm start for next call (can also store per-column)
+        return x, LinearSolverState(CGCache(x, M))
+    return _solve
 
 
 def pcg(

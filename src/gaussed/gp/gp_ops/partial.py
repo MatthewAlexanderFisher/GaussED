@@ -7,7 +7,6 @@ import jax
 
 from gaussed.gp.gp_ops.base import Operator, Functional, OpContext, FunSpec, KernelSpec
 from gaussed.utils.diff_helpers import _dir_tangent_like, _partial_rows, _partial_rows_x, _partial_rows_y, _mixed_xy
-from gaussed.utils.make_specs import make_kernel_spec
 
 # === Partial operator =========================================================
 

@@ -1,18 +1,19 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Tuple    
+from typing import Tuple, Optional
 import jax
 import jax.numpy as jnp
 from jax import Array
+from jax.typing import DTypeLike
 
 from gaussed.utils.constraints import Positive, Transform, TriLPositive
-from gaussed.engines.linops import LinearOp, ScaledIdentityOp, DiagOp, DenseOp, SumOp, BlockDiagOp
+from gaussed.linops import LinearOp, ScaledIdentityOp, DiagOp, DenseOp, SumOp, BlockDiagOp
 
 @jax.tree_util.register_pytree_node_class
 @dataclass
 class NoiseSpec:
     """Gaussian observation noise."""
-    def as_op(self, n: int, dtype: Array) -> LinearOp: ...
+    def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp: ...
 
     def add_to_op(self, A: LinearOp, n: int, dtype) -> LinearOp:
         return SumOp(A, self.as_op(n, dtype))
@@ -31,7 +32,7 @@ class HomoskedasticNoise(NoiseSpec):
 
     def sigma2(self) -> Array: return self.transform.forward(self.raw)
 
-    def as_op(self, n: int, dtype: Array) -> LinearOp:
+    def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp:
         return ScaledIdentityOp(n, self.sigma2().astype(dtype), dtype)
     
     def tree_flatten(self): 
@@ -61,7 +62,7 @@ class DiagonalNoise(NoiseSpec):
     def diag(self) -> Array: 
         return self.transform.forward(self.raw)
 
-    def as_op(self, n: int, dtype: Array) -> LinearOp:
+    def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp:
         d = self.diag().astype(dtype)
         assert d.shape[0] == n
         return DiagOp(d)
@@ -88,7 +89,7 @@ class DiagonalNoise(NoiseSpec):
 @dataclass
 class FullNoiseDense(NoiseSpec):
     Sigma: Array
-    def as_op(self, n: int, dtype: Array) -> LinearOp:
+    def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp:
         S = self.Sigma.astype(dtype)
         assert S.shape == (n, n)
         return DenseOp(S)
@@ -115,7 +116,7 @@ class FullNoiseChol(NoiseSpec):
     raw: Array                    # unconstrained, shape (..., d(d+1)//2)
     tril: TriLPositive            # static (dim, eps), NOT a JAX leaf
 
-    def as_op(self, n: int, dtype: Array) -> LinearOp:
+    def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp:
         d = self.tril.dim
         assert n == d, f"FullNoiseChol needs n == dim, got n={n}, dim={d}"
         L = self.tril.forward(self.raw).astype(dtype)  # (..., d, d); typically no batch here
@@ -156,7 +157,7 @@ class FullNoiseChol(NoiseSpec):
 class FullNoiseOp(NoiseSpec):
     op: LinearOp
 
-    def as_op(self, n: int, dtype: Array) -> LinearOp:
+    def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp:
         assert self.op.shape == (n, n)
         return self.op
     
@@ -180,7 +181,7 @@ class FullNoiseOp(NoiseSpec):
 @dataclass
 class Noiseless(NoiseSpec):
     """Σ = 0 (exact interpolation)."""
-    def as_op(self, n: int, dtype) -> LinearOp:
+    def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp:
         return LinearOp((n, n), mv=lambda v: jnp.zeros_like(v),
                         rmv=lambda v: jnp.zeros_like(v),
                         to_dense=lambda: jnp.zeros((n, n), dtype=dtype))
@@ -209,7 +210,7 @@ class BlockNoise(NoiseSpec):
             return tuple(F.block_sizes())  # e.g. from your Stack implementation
         raise ValueError("BlockNoise: sizes=None and probe doesn't expose block_sizes().")
 
-    def as_op(self, n: int, dtype) -> LinearOp:
+    def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp:
         # If called without a probe context, sizes must be known.
         if self.sizes is None:
             raise ValueError("BlockNoise.as_op requires sizes to be set when no probe is provided.")
@@ -219,7 +220,7 @@ class BlockNoise(NoiseSpec):
         return op
 
     # Convenience when you DO have the training probe F (recommended path)
-    def as_op_for_probe(self, F, dtype) -> LinearOp:
+    def as_op_for_probe(self, F, dtype: Optional[DTypeLike]) -> LinearOp:
         sizes = self._sizes_from_probe(F)
         n = sum(sizes)
         ops = tuple(b.as_op(m, dtype) for b, m in zip(self.blocks, sizes))

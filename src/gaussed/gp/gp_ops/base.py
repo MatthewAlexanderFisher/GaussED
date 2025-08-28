@@ -4,7 +4,7 @@ from typing import Protocol, Optional, Tuple, Callable, Literal, Any
 from jax import Array
 import jax
 
-from gaussed.backends.solvers.base import Quadrature, DiscreteQuadrature, BiQuadrature
+from gaussed.backends.solvers.quadrature import Quadrature, DiscreteQuadrature, BiQuadrature
 from gaussed.domains.base import Domain
 
 # === Function and Kernel Specs ===============================================
@@ -117,31 +117,3 @@ class Functional(Protocol):
     def pair(self, other: "Functional", ks: KernelSpec, ctx: OpContext) -> Array: ...
 
 
-# === Probe is a symbolic chain of Operators with a reducer ===============
-@jax.tree_util.register_pytree_node_class
-@dataclass(frozen=True)
-class Probe:
-    ops: Tuple[Operator, ...]
-    fnl: Functional
-
-    # unary
-    def apply(self, g: FunSpec, ctx: OpContext) -> Array:
-        for op in self.ops: g = op(g)
-        return self.fnl(g, ctx)
-
-    # binary (kernel)
-    def kernel(self, other: "Probe", ks: KernelSpec, ctx: OpContext) -> Array:
-        # left lifts
-        ksL = ks
-        for op in self.ops:
-            ksL = op.lift_left(ksL, ctx)
-        # right lifts
-        ksLR = ksL
-        for op in other.ops:
-            ksLR = op.lift_right(ksLR, ctx)
-        # realise with the two functionals
-        return self.fnl.pair(other.fnl, ksLR, ctx)
-
-    def tree_flatten(self): return ((self.ops, self.fnl), ())
-    @classmethod
-    def tree_unflatten(cls, aux, ch): ops, fnl = ch; return cls(ops, fnl)

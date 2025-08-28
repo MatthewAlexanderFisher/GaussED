@@ -4,7 +4,8 @@ from jax import Array
 import jax.numpy as jnp
 import jax
 
-from gaussed.gp.gp_ops.base import KernelSpec, FunSpec, OpContext, Probe
+from gaussed.gp.gp_ops.base import KernelSpec, FunSpec, OpContext
+from gaussed.gp.gp_ops.probe import Probe
 from gaussed.types import LinearLike
 from gaussed.gp.gp_ops.point_eval import Eval
 from gaussed.linops import LinearOp
@@ -40,7 +41,7 @@ class InducingRep:
                 # solve Kuu w = z
                 w = jax.scipy.linalg.cho_solve((Kuu_fac, True), z)
                 return Kfu @ w                             # (n,)
-            return LinearOp((Kfu.shape[0], Kfu.shape[0]), mv)
+            return LinearOp((Kfu.shape[0], Kfu.shape[0]), mv = mv)
 
         # general cross Q_FG = K_FU K_UU^{-1} K_UG  (dense)
         Kfu = self._Kfu(F, ctx)                            # (nF, m)
