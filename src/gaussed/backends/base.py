@@ -31,8 +31,8 @@ class ExactBackend(Backend):
 
     def make_specs(self, model: "GPModel"):
         mean_spec: FunSpec   = model.gp.mean.to_spec()
-        kernel_spec: KernelSpec = model.gp.kernel.to_spec(model.domain)
-        ctx = OpContext(quad_rule=model.quad_rule)  # optional
+        kernel_spec: KernelSpec = model.gp.kernel.to_spec(model.gp.domain)
+        ctx = OpContext(domain=model.gp.domain, quad_rule=model.quad_rule)  # optional
         return kernel_spec, mean_spec, ctx
 
     def make_rep(self, model: "GPModel"):

@@ -7,6 +7,7 @@ import jax
 
 from gaussed.gp.gp_ops.base import Operator, Functional, OpContext, FunSpec, KernelSpec
 from gaussed.utils.diff_helpers import _dir_tangent_like, _partial_rows, _partial_rows_x, _partial_rows_y, _mixed_xy
+from gaussed.utils.make_specs import make_kernel_spec
 
 # === Partial operator =========================================================
 
@@ -46,9 +47,10 @@ class Partial:
                 (lambda X, Y, j, h=cast(Callable[[Array, Array, int, int], Array], d2_xy_hook): h(X, Y, ax, j))
                 if d2_xy_hook is not None else None
             )
-            return KernelSpec(k0=k0p, d_dx=d_dx_next, d_dy=d_dy_next,
+            # TODO: Pretty sure passing integrate_x = ks.integrate_x etc. is not correct!
+            return KernelSpec(domain=ks.domain, k0=k0p, left_shape=ks.left_shape, right_shape=ks.right_shape, d_dx=d_dx_next, d_dy=d_dy_next,
                               d2_xx=None, d2_yy=None, d2_xy=None,
-                              integrate_x=ks.integrate_x, integrate_y=ks.integrate_y, integrate_xy=ks.integrate_xy)
+                              integrate_x_of=None, integrate_y_of=None, integrate_xy_of=None)
 
         # AD fallback
         k0p = _partial_rows_x(ks.k0, ax)  # ∂/∂x_ax k
@@ -57,8 +59,8 @@ class Partial:
             _, dy = jax.jvp(lambda Y_: k0p(X, Y_), (Y,), (_dir_tangent_like(Y, j),))
             return dy  # (n_x, n_y)
 
-        return KernelSpec(k0=k0p, d_dy=d_dy,
-                          integrate_x=ks.integrate_x, integrate_y=ks.integrate_y, integrate_xy=ks.integrate_xy)
+        return KernelSpec(domain=ks.domain, k0=k0p, d_dy=d_dy, left_shape=ks.left_shape, right_shape=ks.right_shape,
+                          integrate_x_of=None, integrate_y_of=None, integrate_xy_of=None)
 
     def lift_right(self, ks: KernelSpec, ctx: OpContext) -> KernelSpec:
         ay = self.axis
@@ -76,9 +78,9 @@ class Partial:
                 (lambda X, Y, j, h=cast(Callable[[Array, Array, int, int], Array], d2_yy_hook): h(X, Y, ay, j))
                 if d2_yy_hook is not None else None
             )
-            return KernelSpec(k0=k0p, d_dx=d_dx_next, d_dy=d_dy_next,
+            return KernelSpec(domain=ks.domain,k0=k0p, left_shape=ks.left_shape, right_shape=ks.right_shape, d_dx=d_dx_next, d_dy=d_dy_next,
                               d2_xx=None, d2_yy=None, d2_xy=None,
-                              integrate_x=ks.integrate_x, integrate_y=ks.integrate_y, integrate_xy=ks.integrate_xy)
+                              integrate_x_of=None, integrate_y_of=None, integrate_xy_of=None)
 
         # AD fallback
         k0p = _partial_rows_y(ks.k0, ay)  # ∂/∂y_ay k
@@ -86,9 +88,8 @@ class Partial:
             _, dx = jax.jvp(lambda X_: k0p(X_, Y), (X,), (_dir_tangent_like(X, i),))
             return dx
 
-        return KernelSpec(k0=k0p, d_dx=d_dx,
-                          integrate_x=ks.integrate_x, integrate_y=ks.integrate_y, integrate_xy=ks.integrate_xy)
-
+        return KernelSpec(domain=ks.domain, k0=k0p, left_shape=ks.left_shape, right_shape=ks.right_shape, d_dx=d_dx,
+                          integrate_x_of=None, integrate_y_of=None, integrate_xy_of=None)
 
     # pytree plumbing
     def tree_flatten(self):

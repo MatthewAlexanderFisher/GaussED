@@ -7,6 +7,8 @@ import jax.numpy as jnp
 from jax import Array
 from jax.typing import DTypeLike
 
+from gaussed.domains.base import Domain
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(init=False)
 class LinearOp:
@@ -74,26 +76,25 @@ class LinearOp:
     # Transpose
     # -----------------------------
     @property
-    def T(self) -> LinearOp:
+    def T(self) -> "LinearOp":
         """Transpose operator: swaps mv <-> rmv; if rmv is missing, allowed only if square."""
         n, m = self._shape
 
         if self._rmv is None:
             if n != m:
                 raise ValueError("Cannot form transpose without rmv for a non-square operator.")
-            # Symmetric fallback: mv is used for both directions
             mv_T = self._mv
             rmv_T = self._mv
         else:
             mv_T = self._rmv
             rmv_T = self._mv
 
-        # If we can materialise dense, provide a transposed dense too.
+        # Make the type of to_dense_T explicit so None is allowed.
+        to_dense_T: Optional[Callable[[], Array]] = None
         if self._to_dense is not None:
-            def to_dense_T():
+            def _to_dense_T() -> Array:
                 return self.to_dense().T
-        else:
-            to_dense_T = None
+            to_dense_T = _to_dense_T
 
         return LinearOp((m, n), mv=mv_T, rmv=rmv_T, to_dense=to_dense_T)
 
@@ -169,3 +170,48 @@ def BlockDiagOp(blocks: tuple[LinearOp, ...]) -> LinearOp:
 
 def AsLinearOp(A: Array | LinearOp) -> LinearOp:
     return A if isinstance(A, LinearOp) else DenseOp(A)
+
+
+#==== Gram Matrix Constructors ====
+def _prod(shape: Tuple[int, ...]) -> int:
+    p = 1
+    for s in shape: p *= int(s)
+    return p
+
+
+def TensorGramOp(k, X: Array, Y: Array, domain: Domain, to_dense: bool = False):
+    """
+    Build a LinearOp for K(X, Y) where k(x,y) has shape left+right.
+    Operator shape: (nx*L, ny*R), L=prod(left), R=prod(right).
+    """
+    nx = X.shape[0]; ny = Y.shape[0]
+    left  = tuple(getattr(k, "left_shape", ()))
+    right = tuple(getattr(k, "right_shape", ()))
+    L = _prod(left) if left else 1
+    R = _prod(right) if right else 1
+
+    def mv(v_flat: Array) -> Array:
+        V = v_flat.reshape(ny, R)
+        # For fixed x, contract over (ny,right) with V
+        def row_apply(x):
+            KxY = jax.vmap(lambda y: k(x, y, domain))(Y)    # (ny, *left, *right)
+            KxY = KxY.reshape(ny, L, R)
+            return jnp.einsum("ylr,yr->yl", KxY, V)         # (L,)
+        out = jax.vmap(row_apply)(X)                         # (nx, L)
+        return out.reshape(nx * L)
+
+    def rmv(w_flat: Array) -> Array:
+        W = w_flat.reshape(nx, L)
+        def col_apply(y):
+            KYx = jax.vmap(lambda x: k(x, y, domain))(X)    # (nx, *left, *right)
+            KYx = KYx.reshape(nx, L, R)
+            return jnp.einsum("xlr,xl->xr", KYx, W)         # (R,)
+        out = jax.vmap(col_apply)(Y)                         # (ny, R)
+        return out.reshape(ny * R)
+
+    def dense():
+        Kxy = jax.vmap(lambda x: jax.vmap(lambda y: k(x, y, domain))(Y))(X)  # (nx,ny,*l,*r)
+        Kxy = Kxy.reshape(nx, ny, L, R)
+        return jnp.transpose(Kxy, (0, 2, 1, 3)).reshape(nx * L, ny * R)
+
+    return LinearOp((nx * L, ny * R), mv=mv, rmv=rmv, to_dense=(dense if to_dense else None))

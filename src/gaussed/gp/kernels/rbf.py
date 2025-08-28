@@ -33,15 +33,18 @@ class RBFParams:
 @dataclass
 class RBFKernel:
     params: RBFParams
-    ell_transform: Transform = field(default_factory=Positive)
-    sigma2_transform: Transform = field(default_factory=Positive)
+    lengthscale_transform: Transform = field(default_factory=Positive)
+    amplitude_transform: Transform = field(default_factory=Positive)
+
+    # tensor-kernel interface (static; not part of pytree children)
+    left_shape: Tuple[int, ...] = field(default_factory=tuple)
+    right_shape: Tuple[int, ...] = field(default_factory=tuple)
+
 
     def __call__(self, x: Array, y: Array, domain: Domain) -> Array:
-        ell = self.ell_transform.forward(self.params.lengthscale)
-        s2 = self.sigma2_transform.forward(self.params.amplitude)
-
-        r = domain.pairwise_geometry(x, y) / (ell + 1e-12)
-        return s2 * jnp.exp(-0.5 * r * r)
+        lengthscale, amplitude = self.get_transformed_params()   # ℓ > 0, σ² > 0
+        r = domain.pairwise_geometry(x, y) / (lengthscale + 1e-12)
+        return amplitude * jnp.exp(-0.5 * r * r)
 
     def spectral_density(self, omega: Array) -> Array:
         r"""
@@ -75,29 +78,32 @@ class RBFKernel:
         Returns:
             Array broadcasting over ``omega`` and any batch dimensions of the parameters.
         """
-        ell = self.ell_transform.forward(self.params.lengthscale)   # ℓ > 0
-        s2  = self.sigma2_transform.forward(self.params.amplitude)  # σ² > 0
-        const = s2 * jnp.sqrt(2.0 * jnp.pi) * ell                   # σ² √(2π) ℓ
-        return const * jnp.exp(-0.5 * (ell * omega) ** 2)
+        lengthscale, amplitude = self.get_transformed_params()   # ℓ > 0, σ² > 0
+        const = amplitude * jnp.sqrt(2.0 * jnp.pi) * lengthscale  # σ² √(2π) ℓ
+        return const * jnp.exp(-0.5 * (lengthscale * omega) ** 2)
 
+    def get_transformed_params(self):
+        return (self.lengthscale_transform.forward(self.params.lengthscale),
+                self.amplitude_transform.forward(self.params.amplitude))
+
+    # pytree plumbing
     def tree_flatten(self):
         children = (self.params,)
-        aux = (self.ell_transform, self.sigma2_transform)
+        aux = (self.lengthscale_transform, self.amplitude_transform, self.left_shape, self.right_shape)
         return children, aux
-    
+
     @classmethod
     def tree_unflatten(cls, aux, children):
-        ell_t, s2_t = aux
+        ell_t, s2_t, lsh, rsh = aux
         (params,) = children
-        obj = cls(params, ell_t, s2_t)
-        return obj
+        return cls(params, ell_t, s2_t, lsh, rsh)
 
     @classmethod
     def axes(cls, params_axis: RBFParams):
         obj = object.__new__(cls)
         obj.params = params_axis
-        # Transforms are static; reuse defaults
-        obj.ell_transform = Positive()
-        obj.sigma2_transform = Positive()
+        obj.lengthscale_transform = cls.__dict__.get("lengthscale_transform", None) or Positive()
+        obj.amplitude_transform = cls.__dict__.get("amplitude_transform", None) or Positive()
+        obj.left_shape = ()
+        obj.right_shape = ()
         return obj
-    
