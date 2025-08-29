@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple, Optional
 import jax
@@ -5,7 +6,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from gaussed.backends.solvers.linear_solver import LinearSolverState, SolveFn, SqrtFn, LogdetFn
-from gaussed.linops import LinearOp, AsLinearOp
+from gaussed.linops.linop import LinearOp, AsLinearOp, materialise_dense
 from gaussed.types import LinearLike
 
 # ===== SVD Cache =====
@@ -60,7 +61,7 @@ def svd_solve_hook(
       x = V diag(1/s_clipped) U^T b
     If `symmetrise=True`, treat A as symmetric and pre-symmetrise A.
     """
-    def _solve(op: LinearOp, rhs: Array, st: LinearSolverState):
+    def _solve(op: LinearOp, rhs: LinearOp, st: LinearSolverState):
         cache = st.cache
         if isinstance(cache, SVDCache):
             U, s, V = cache.U, cache.s, cache.V
@@ -68,14 +69,15 @@ def svd_solve_hook(
             U, s, V = svd_factor_from_op(op, jitter=jitter, symmetrise=symmetrise)
             cache = SVDCache(U, s, V)
 
+        _rhs = materialise_dense(rhs)
         # Build reciprocal with cutoff (avoids blow-ups on near-zero s)
-        smax = jnp.max(s) if s.size else jnp.array(1.0, rhs.dtype)
+        smax = jnp.max(s) if s.size else jnp.array(1.0, _rhs.dtype)
         cutoff = rcond * smax
         s_inv = jnp.where(s > cutoff, 1.0 / s, 0.0)
 
         # Handle vector (n,) or matrix (n,k) RHS uniformly:
-        x = V @ (s_inv[:, None] * (U.T @ rhs))
-        return x, LinearSolverState(cache)
+        x = V @ (s_inv[:, None] * (U.T @ _rhs))
+        return AsLinearOp(x), LinearSolverState(cache)
     return _solve
 
 def svd_sqrt_hook(
@@ -89,7 +91,7 @@ def svd_sqrt_hook(
     Correct as A^{-1/2} when A is symmetric positive definite (then U=V, s=eigs).
     With `symmetrise=True`, we enforce symmetry before factoring.
     """
-    def _sqrt(op: LinearOp, rhs: Array, st: LinearSolverState):
+    def _sqrt(op: LinearOp, rhs: LinearOp, st: LinearSolverState):
         cache = st.cache
         if isinstance(cache, SVDCache):
             U, s, V = cache.U, cache.s, cache.V
@@ -97,12 +99,13 @@ def svd_sqrt_hook(
             U, s, V = svd_factor_from_op(op, jitter=jitter, symmetrise=symmetrise)
             cache = SVDCache(U, s, V)
 
-        smax = jnp.max(s) if s.size else jnp.array(1.0, rhs.dtype)
+        _rhs = materialise_dense(rhs)
+        smax = jnp.max(s) if s.size else jnp.array(1.0, _rhs.dtype)
         cutoff = rcond * smax
         s_isqrt = jnp.where(s > cutoff, 1.0 / jnp.sqrt(s), 0.0)
 
-        y = V @ (s_isqrt[:, None] * (U.T @ rhs))
-        return y, LinearSolverState(cache)
+        y = V @ (s_isqrt[:, None] * (U.T @ _rhs))
+        return AsLinearOp(y), LinearSolverState(cache)
     return _sqrt
 
 def svd_logdet_hook(

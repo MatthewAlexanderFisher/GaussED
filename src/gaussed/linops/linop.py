@@ -1,7 +1,7 @@
 # engines/linops/base.py
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Tuple, Optional
+from typing import Callable, Tuple, Optional, Protocol, Any
 import jax
 import jax.numpy as jnp
 from jax import Array
@@ -9,6 +9,7 @@ from jax.typing import DTypeLike
 
 from gaussed.domains.base import Domain
 from gaussed.types import LinearLike
+from gaussed.utils.shape_helpers import _prod, _as_2d, _restore, pack_kernel
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(init=False)
@@ -164,6 +165,50 @@ class LinearOp:
             return self.to_dense().T
         return LinearOp((m, n), to_dense=_to_dense_T)
 
+    def diag(self) -> Array:
+        """
+        Return the main diagonal of A as shape (min(n_rows, n_cols),).
+        Uses dense fast-path if available; otherwise applies a single
+        batched mv/rmv with a thin identity to avoid full materialisation.
+        """
+        n, m = self.shape
+        k = min(n, m)
+
+        # Dense fast path
+        if self._A is not None:
+            return jnp.diag(self._A)  # already length k
+
+        # Helper to pick a basis dtype (avoid forcing to_dense just for dtype)
+        basis_dtype = self.dtype if self.dtype is not None else jnp.result_type(0.0)
+
+        # If both mv and rmv exist: choose the smaller basis dimension
+        if (self._mv is not None) and (self._rmv is not None):
+            if m <= n:
+                # Use mv on first k columns of the identity in R^m
+                E = jnp.eye(m, k, dtype=basis_dtype)      # (m, k)
+                Y = self.mv(E)                             # (n, k) = A[:, :k]
+                return jnp.diagonal(Y)                     # (k,)
+            else:
+                # Use rmv on first k columns of the identity in R^n
+                F = jnp.eye(n, k, dtype=basis_dtype)      # (n, k)
+                Z = self.rmv(F)                            # (m, k) = (A^T)[:, :k]
+                return jnp.diagonal(Z)                     # (k,)
+
+        # Only mv available
+        if self._mv is not None:
+            E = jnp.eye(m, k, dtype=basis_dtype)          # (m, k)
+            Y = self.mv(E)                                 # (n, k)
+            return jnp.diagonal(Y)
+
+        # Only rmv available
+        if self._rmv is not None:
+            F = jnp.eye(n, k, dtype=basis_dtype)          # (n, k)
+            Z = self.rmv(F)                                # (m, k)
+            return jnp.diagonal(Z)
+
+        # Fallback: materialise
+        return jnp.diag(self.to_dense())
+
     # -----------------------------
     # PyTree plumbing
     # -----------------------------
@@ -183,8 +228,10 @@ class LinearOp:
 
 # Convenience constructors
 def DenseOp(A: Array) -> LinearOp:
-    n, m = A.shape
-    return LinearOp((n, m), mv=lambda v: A @ v, rmv=lambda v: A.T @ v, to_dense=lambda: A)
+    out_shape = A.shape[2:]
+    A_flat = pack_kernel(A, out_shape)
+
+    return LinearOp.from_dense(A_flat)
 
 def IdentityOp(n: int, dtype: DTypeLike | None) -> LinearOp:
     return LinearOp((n, n), mv=lambda v: v, rmv=lambda v: v, to_dense=lambda: jnp.eye(n, dtype))
@@ -229,47 +276,3 @@ def AsLinearOp(A: "LinearLike") -> LinearOp:
 def materialise_dense(A: "LinearLike") -> Array:
     return A if isinstance(A, Array) else A.to_dense()
 
-
-#==== Gram Matrix Constructors ====
-def _prod(shape: Tuple[int, ...]) -> int:
-    p = 1
-    for s in shape: p *= int(s)
-    return p
-
-
-def TensorGramOp(k, X: Array, Y: Array, domain: Domain, to_dense: bool = False):
-    """
-    Build a LinearOp for K(X, Y) where k(x,y) has shape left+right.
-    Operator shape: (nx*L, ny*R), L=prod(left), R=prod(right).
-    """
-    nx = X.shape[0]; ny = Y.shape[0]
-    left  = tuple(getattr(k, "left_shape", ()))
-    right = tuple(getattr(k, "right_shape", ()))
-    L = _prod(left) if left else 1
-    R = _prod(right) if right else 1
-
-    def mv(v_flat: Array) -> Array:
-        V = v_flat.reshape(ny, R)
-        # For fixed x, contract over (ny,right) with V
-        def row_apply(x):
-            KxY = jax.vmap(lambda y: k(x, y, domain))(Y)    # (ny, *left, *right)
-            KxY = KxY.reshape(ny, L, R)
-            return jnp.einsum("ylr,yr->yl", KxY, V)         # (L,)
-        out = jax.vmap(row_apply)(X)                         # (nx, L)
-        return out.reshape(nx * L)
-
-    def rmv(w_flat: Array) -> Array:
-        W = w_flat.reshape(nx, L)
-        def col_apply(y):
-            KYx = jax.vmap(lambda x: k(x, y, domain))(X)    # (nx, *left, *right)
-            KYx = KYx.reshape(nx, L, R)
-            return jnp.einsum("xlr,xl->xr", KYx, W)         # (R,)
-        out = jax.vmap(col_apply)(Y)                         # (ny, R)
-        return out.reshape(ny * R)
-
-    def dense():
-        Kxy = jax.vmap(lambda x: jax.vmap(lambda y: k(x, y, domain))(Y))(X)  # (nx,ny,*l,*r)
-        Kxy = Kxy.reshape(nx, ny, L, R)
-        return jnp.transpose(Kxy, (0, 2, 1, 3)).reshape(nx * L, ny * R)
-
-    return LinearOp((nx * L, ny * R), mv=mv, rmv=rmv, to_dense=(dense if to_dense else None))

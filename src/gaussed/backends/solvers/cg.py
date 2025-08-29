@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from functools import partial
 from typing import Optional, Tuple, Dict
@@ -6,7 +7,7 @@ from jax import Array
 import jax
 
 from gaussed.backends.solvers.linear_solver import LinearSolver, SolveFn, LinearSolverState, SqrtFn, LogdetFn
-from gaussed.linops import LinearOp, IdentityOp, AsLinearOp
+from gaussed.linops.linop import LinearOp, IdentityOp, AsLinearOp, materialise_dense
 from gaussed.types import LinearLike
 
 # ===== CG cache (warm start + preconditioner) =====
@@ -31,13 +32,14 @@ class CGCache:
 def cg_solve_hook(tol: float = 1e-6, maxiter: int = 200, M: Optional[LinearLike] = None) -> SolveFn:
     Mop = None if M is None else AsLinearOp(M)
     Mmv = None if Mop is None else Mop.mv
-    def _solve(op: LinearOp, rhs: Array, st: LinearSolverState):
+    def _solve(op: LinearOp, rhs: LinearOp, st: LinearSolverState):
         cache = st.cache if isinstance(st.cache, CGCache) else CGCache(None)
         x0 = cache.x0
         mv = op.mv
-        x, _ = jax.scipy.sparse.linalg.cg(mv, rhs, tol=tol, maxiter=maxiter, M=Mmv, x0=x0)
+        _rhs = materialise_dense(rhs)
+        x, _ = jax.scipy.sparse.linalg.cg(mv, _rhs, tol=tol, maxiter=maxiter, M=Mmv, x0=x0)
         # store warm start for next call (can also store per-column)
-        return x, LinearSolverState(CGCache(x, M))
+        return AsLinearOp(x), LinearSolverState(CGCache(x, M))
     return _solve
 
 

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Union, Any
 from jax import Array
 
 if TYPE_CHECKING:
-    from gaussed.linops import LinearOp  # only for type checkers
+    from gaussed.linops.linop import LinearOp  # only for type checkers
     from gaussed.gp.gp_ops.probe import Probe, ProbeStack
 
 LinearLike = Union["LinearOp", Array]  # forward-ref; no runtime import

@@ -1,10 +1,11 @@
+from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Protocol, Optional, Callable, Any, Tuple
 import jax.numpy as jnp
 from jax import Array
 import jax
 
-from gaussed.linops import LinearOp, DenseOp, AsLinearOp
+from gaussed.linops.linop import LinearOp, DenseOp, AsLinearOp
 from gaussed.types import LinearLike
 
 # -------------------------------------------------------------------
@@ -12,8 +13,8 @@ from gaussed.types import LinearLike
 # -------------------------------------------------------------------
 
 # Hooks must *read* state and *return* updated state.
-SolveFn  = Callable[[LinearOp, Array, "LinearSolverState"], Tuple[Array, "LinearSolverState"]]
-SqrtFn   = Callable[[LinearOp, Array, "LinearSolverState"], Tuple[Array, "LinearSolverState"]]
+SolveFn  = Callable[[LinearOp, LinearOp, "LinearSolverState"], Tuple[LinearOp, "LinearSolverState"]]
+SqrtFn   = Callable[[LinearOp, LinearOp, "LinearSolverState"], Tuple[LinearOp, "LinearSolverState"]]
 LogdetFn = Callable[[LinearOp, "LinearSolverState"], Tuple[Array, "LinearSolverState"]]
 
 @jax.tree_util.register_pytree_node_class
@@ -53,11 +54,11 @@ class LinearSolver:
     state: LinearSolverState = LinearSolverState()
 
     # Core API returns (result, updated_solver) so caches propagate.
-    def solve_and_update(self, rhs: Array) -> Tuple[Array, "LinearSolver"]:
+    def solve_and_update(self, rhs: LinearOp) -> Tuple[LinearOp, "LinearSolver"]:
         out, new_state = self.fns.solve(self.op, rhs, self.state)
         return out, replace(self, state=new_state)
 
-    def sqrt_and_update(self, rhs: Array) -> Tuple[Array, "LinearSolver"]:
+    def sqrt_and_update(self, rhs: LinearOp) -> Tuple[LinearOp, "LinearSolver"]:
         out, new_state = self.fns.sqrt(self.op, rhs, self.state)
         return out, replace(self, state=new_state)
 
@@ -66,10 +67,10 @@ class LinearSolver:
         return val, replace(self, state=new_state)
 
     # Convenience (discard updates) – use sparingly
-    def solve(self, rhs: Array) -> Array:
+    def solve(self, rhs: LinearOp) -> LinearOp:
         y, _ = self.solve_and_update(rhs)
         return y
-    def sqrt(self, rhs: Array) -> Array:
+    def sqrt(self, rhs: LinearOp) -> LinearOp:
         y, _ = self.sqrt_and_update(rhs)
         return y
     def log_det(self) -> Array:

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Union    
 from jax import Array
 import jax
@@ -7,7 +7,8 @@ import jax.numpy as jnp
 
 from gaussed.gp.gp_ops.base import KernelSpec, FunSpec, OpContext
 from gaussed.gp.gp_ops.probe import Probe
-from gaussed.linops import LinearOp
+from gaussed.linops.linop import LinearOp
+from gaussed.linops.constructors import LinOpConstructor, DenseGramConstructor
 from gaussed.types import LinearLike
 
 @jax.tree_util.register_pytree_node_class
@@ -18,6 +19,7 @@ class BasisRep:
     mean_spec: FunSpec
     phi_spec: FunSpec           # φ: X -> (n, m)
     Lambda: Union[Array, float] # (m,m) or scalar
+    linop_constructor: LinOpConstructor = field(default_factory=lambda: DenseGramConstructor())  # default mv
 
     def _design(self, F: Probe, ctx: OpContext) -> Array:
         # Materialise D for now; you can add a streaming version later

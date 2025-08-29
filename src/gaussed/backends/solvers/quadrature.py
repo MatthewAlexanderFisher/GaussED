@@ -1,10 +1,11 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, Callable
 import jax
 import jax.numpy as jnp
 from jax import Array
 
-from gaussed.linops import LinearOp, DenseOp, AsLinearOp
+from gaussed.linops.linop import LinearOp, DenseOp, AsLinearOp
 from gaussed.domains.base import Domain
 
 # ----- Quadrature protocols ---------------------------------------------------

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 from gaussed.backends.solvers.linear_solver import LinearSolverState
-from gaussed.linops import LinearOp, AsLinearOp
+from gaussed.linops.linop import LinearOp, AsLinearOp, materialise_dense
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -34,29 +34,31 @@ def cholesky_factor_from_op(op: LinearOp, jitter: float = 0.0, symmetrise: bool 
 
 # Hook: SOLVE
 def chol_solve_hook(jitter: float = 0.0, symmetrise: bool = True) -> SolveFn:
-    def _solve(op: LinearOp, rhs: Array, st: LinearSolverState):
+    def _solve(op: LinearOp, rhs: LinearOp, st: LinearSolverState):
         cache = st.cache
         if isinstance(cache, CholCache):
             L = cache.L
         else:
             L = cholesky_factor_from_op(op, jitter, symmetrise)
             cache = CholCache(L)
-        y = jax.scipy.linalg.solve_triangular(L, rhs, lower=True, trans='N')
+        _rhs = materialise_dense(rhs)
+        y = jax.scipy.linalg.solve_triangular(L, _rhs, lower=True, trans='N')
         x = jax.scipy.linalg.solve_triangular(L, y, lower=True, trans='T')
-        return x, LinearSolverState(cache)
+        return AsLinearOp(x), LinearSolverState(cache)
     return _solve
 
 # Hook: SQRT (apply A^{-1/2} = L^{-T})
 def chol_sqrt_hook(jitter: float = 0.0, symmetrise: bool = True) -> SqrtFn:
-    def _sqrt(op: LinearOp, rhs: Array, st: LinearSolverState):
+    def _sqrt(op: LinearOp, rhs: LinearOp, st: LinearSolverState):
         cache = st.cache
         if isinstance(cache, CholCache):
             L = cache.L
         else:
             L = cholesky_factor_from_op(op, jitter, symmetrise)
             cache = CholCache(L)
-        x = jax.scipy.linalg.solve_triangular(L, rhs, lower=True, trans='T')
-        return x, LinearSolverState(cache)
+        _rhs = materialise_dense(rhs)
+        x = jax.scipy.linalg.solve_triangular(L, _rhs, lower=True, trans='T')
+        return AsLinearOp(x), LinearSolverState(cache)
     return _sqrt
 
 # Hook: LOGDET

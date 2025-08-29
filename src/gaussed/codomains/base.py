@@ -6,33 +6,76 @@ import jax.numpy as jnp
 from jax import tree_util as jtu
 from jax import Array
 
+from gaussed.utils.shape_helpers import _prod
+
 @jax.tree_util.register_pytree_node_class
-@dataclass(init=False)
+@dataclass(frozen=True)
 class Codomain:
-    event_shape: Tuple[int, ...]
-    coregionalisation: Optional[Array]
+    output_shape: Tuple[int, ...]  # e.g. (1,) scalar, (p,), (p,q), ...
 
-    def __init__(self, event_shape: Tuple[int, ...], coregionalisation: Optional[Array] = None):
-        self.event_shape = tuple(event_shape)
-        self.coregionalisation = None if coregionalisation is None else jnp.asarray(coregionalisation)
+    def __init__(self, output_shape: Optional[Tuple[int, ...]]):
+        object.__setattr__(self, "output_shape", tuple(output_shape) if output_shape is not None else (1,))
 
-    def lift_cov(self, Kxy: Array) -> Array:
-        C = self.coregionalisation
-        return Kxy if C is None else Kxy[..., None, None] * C[None, None, :, :]
+    # Alias, if you still use the old name elsewhere
+    @property
+    def event_shape(self) -> Tuple[int, ...]:
+        return self.output_shape
 
-    def tree_flatten(self):
-        # C can be None → keep a flag in aux
-        children = tuple([] if self.coregionalisation is None else [self.coregionalisation])
-        aux = (self.event_shape, self.coregionalisation is None)
-        return children, aux
+    # ---- Mean enforcement: (n,*E) ----
+    def ensure_mean_outputs(self, Y: Array, n: int) -> Array:
+        Y = jnp.asarray(Y)
+        E = self.output_shape
+        if Y.ndim == len(E):                 # (*E,) -> (1,*E)
+            return Y.reshape((1, *E))
+        if E == (1,) and Y.ndim == 1:        # (n,) -> (n,1)
+            return Y[:, None]
+        if Y.ndim == 1 + len(E) and Y.shape[1:] == E:
+            return Y
+        # permissive reshape if sizes match
+        if Y.size == n * _prod(E):
+            return Y.reshape((n, *E))
+        raise ValueError(f"Mean returned {Y.shape}, expected (n,{E})")
 
+    # ---- Kernel block enforcement: (n_x, n_y, *L, *R) ----
+    def enforce_kernel_shape(
+        self,
+        K: Array,
+        n_x: int,
+        n_y: int,
+        left_shape: Tuple[int, ...],
+        right_shape: Tuple[int, ...],
+    ) -> Array:
+        K = jnp.asarray(K)
+        want_nd = 2 + len(left_shape) + len(right_shape)
+        if K.ndim == want_nd:
+            return K
+        if K.ndim == 2 and not left_shape and not right_shape:
+            return K
+        if K.ndim == 0 and n_x == 1 and n_y == 1 and not left_shape and not right_shape:
+            return K.reshape(1, 1)
+        if K.shape == (*left_shape, *right_shape) and n_x == 1 and n_y == 1:
+            return K.reshape((1, 1, *left_shape, *right_shape))
+        size_ok = (K.size == n_x * n_y * _prod(left_shape) * _prod(right_shape))
+        if size_ok:
+            return K.reshape((n_x, n_y, *left_shape, *right_shape))
+        raise ValueError(
+            f"Kernel returned {K.shape}; expected (n_x,n_y,{left_shape},{right_shape})"
+        )
+
+    # ---- Flatten/unflatten event dims ----
+    def flatten_events(self, Y: Array) -> Array:
+        Y = jnp.asarray(Y)
+        if Y.ndim == 1: return Y
+        n = Y.shape[0]; e = _prod(Y.shape[1:])
+        return Y.reshape(n * e)
+
+    def unflatten_events(self, y: Array, n: int) -> Array:
+        return jnp.asarray(y).reshape(n, *self.output_shape)
+
+    # pytree
+    def tree_flatten(self): return (), (self.output_shape,)
     @classmethod
-    def tree_unflatten(cls, aux, children):
-        ev, none_flag = aux
-        C = None if none_flag else children[0]
-        return cls(ev, C)
-
+    def tree_unflatten(cls, aux, ch): (out_shape,) = aux; return cls(out_shape)
     @classmethod
-    def axes(cls, ev_axis, C_axis):
-        obj = object.__new__(cls); obj.event_shape = ev_axis; obj.coregionalisation = C_axis
-        return obj
+    def axes(cls, axis: Tuple[int, ...]) -> "Codomain":
+        obj = object.__new__(cls); object.__setattr__(obj, "output_shape", tuple(axis)); return obj

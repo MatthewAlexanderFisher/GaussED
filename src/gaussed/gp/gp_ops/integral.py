@@ -27,7 +27,8 @@ class Integral:
 
     # ---------- Left kernel map: Y ↦ ∫_X k(X,Y) dμ_X ----------
     def left_kernel_map(self, ks: KernelSpec, ctx: OpContext) -> FunSpec:
-        domX = self.dom or ctx.domain
+        domX = self.dom or ctx.domain # integrate over X (note OpContext/self domain is used over KernelSpec)
+        cod = ks.codomain
         qx = self.quad or ctx.quad_x or ctx.quad  # Optional[Quadrature]
 
         # 1) Build f_eval(Y) = ∫_X k(X,Y) dμ_X over domX
@@ -53,7 +54,7 @@ class Integral:
             f_partial2 = lambda Y, i, j, d2_yy=d2_yy, qx=qx, domX=domX: qx.apply(lambda X: d2_yy(X, Y, i, j), domX)
 
         # FunSpec.integrate should have type Optional[Callable[[Domain], Optional[Array]]]
-        return FunSpec(eval=f_eval, integrate=f_integrate, partial=f_partial, partial2=f_partial2)
+        return FunSpec(eval=f_eval, codomain=cod, integrate=f_integrate, partial=f_partial, partial2=f_partial2)
 
     # ---------- Right reduction: integrate a FunSpec(Y) over Y ----------
     def right_reduce(self, F: FunSpec, ctx: OpContext) -> Array:

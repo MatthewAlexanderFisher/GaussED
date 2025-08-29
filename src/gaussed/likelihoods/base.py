@@ -7,7 +7,7 @@ from jax import Array
 from gaussed.gp.gp_ops.probe import Probe
 from gaussed.types import ProbeLike
 from gaussed.gp.base import GP, PosteriorGP
-from gaussed.linops import LinearOp
+from gaussed.linops.linop import LinearOp
 
 class Likelihood(Protocol):
     def op_for(self, F: Probe, dtype) -> LinearOp: ...

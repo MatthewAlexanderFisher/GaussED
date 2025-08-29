@@ -38,20 +38,47 @@ class RBFKernel:
     amplitude_transform: Transform = field(default_factory=Positive)
 
     # tensor-kernel interface (static; not part of pytree children)
-    left_shape: Tuple[int, ...] = field(default_factory=tuple)
-    right_shape: Tuple[int, ...] = field(default_factory=tuple)
+    left_shape: Tuple[int, ...] = field(default_factory=lambda: (1,))
+    right_shape: Tuple[int, ...] = field(default_factory=lambda: (1,))
 
-    # scalar pair (x: (d,), y: (d,)) -> ()
+
+    # scalar pair (x: (input_shape,), y: (input_shape,)) -> (left_shape, right_shape)
     def pair(self, x: Array, y: Array, domain: "Domain") -> Array:
         lengthscale, amplitude = self.get_transformed_params()   # ℓ > 0, σ² > 0
-        r = domain.pairwise_geometry(x, y) / (lengthscale + 1e-12)
-        return amplitude * jnp.exp(-0.5 * r * r)
+        # reshape ell for ARD to broadcast over input dims if needed
+        in_shape = tuple(domain.input_shape)
+        if lengthscale.ndim != 0:
+            lengthscale = lengthscale.reshape(in_shape)
+        # reuse batched path for correctness
+        K = self.__call__(x.reshape((1, *in_shape)),
+                          y.reshape((1, *in_shape)),
+                          domain)  # (1,1,*L,*R)
+        return K[0, 0, ...]         # (*L,*R)
 
+    # Batched kernel: (n_f, *in) × (n_g, *in) -> (n_f, n_g, *L, *R)
+    def __call__(self, x: Array, y: Array, domain: "Domain") -> Array:
+        in_shape = tuple(domain.input_shape)
+        x = domain.ensure_inputs(x)  # (n_f, *in)
+        y = domain.ensure_inputs(y)  # (n_g, *in)
+        n_f, n_g = x.shape[0], y.shape[0]
 
-    def __call__(self, x: Array, y: Array, domain: Domain) -> Array:
         lengthscale, amplitude = self.get_transformed_params()   # ℓ > 0, σ² > 0
-        r = domain.pairwise_geometry(x, y) / (lengthscale + 1e-12)
-        return amplitude * jnp.exp(-0.5 * r * r)
+        # ARD or scalar: broadcast by reshaping ell to (1,*in) if needed
+        if lengthscale.ndim == 0:
+            x_scaled, y_scaled = x / lengthscale, y / lengthscale
+        else:
+            lengthscale_b = lengthscale.reshape((1, *in_shape))
+            x_scaled, y_scaled = x / lengthscale_b, y / lengthscale_b
+
+        # pairwise squared distance -> (n_f, n_g)
+        d2 = domain.squared_pairwise_geometry(x_scaled, y_scaled)
+
+        K_base = amplitude * jnp.exp(-0.5 * d2)  # (n_f, n_g)
+
+        # Base RBF is scalar-valued: enforce that |L|=|R|=1 and pack to (n_f,n_g,*L,*R)
+        L, R = self.left_shape, self.right_shape
+        K = K_base.reshape((n_f, n_g, *L, *R))  # adds the (1,1) tail in scalar case
+        return K
 
     def spectral_density(self, omega: Array) -> Array:
         r"""

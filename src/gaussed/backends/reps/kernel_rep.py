@@ -1,10 +1,12 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from jax import Array
 import jax
 
 from gaussed.gp.gp_ops.base import KernelSpec, FunSpec, OpContext
 from gaussed.gp.gp_ops.probe import Probe, ProbeStack
+from gaussed.linops.constructors import LinOpConstructor, DenseGramConstructor
+from gaussed.types import LinearLike
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -12,6 +14,7 @@ class KernelRep:
     _kernel_spec: KernelSpec
     _mean_spec: FunSpec
     ctx: OpContext
+    linop_constructor: LinOpConstructor = field(default_factory=DenseGramConstructor)  # default mv; swap to DenseGramConstructor if you like
 
     # read-only properties to satisfy CovRep
     @property
@@ -22,14 +25,12 @@ class KernelRep:
     def mean_spec(self) -> FunSpec:
         return self._mean_spec
 
-    def gram(self, F: ProbeStack, G: ProbeStack, ctx: OpContext) -> Array:
-        return F.kernel(G, self._kernel_spec, ctx)
+    def gram(self, F: ProbeStack, G: ProbeStack, ctx: OpContext) -> LinearLike:
+        linop = self.linop_constructor(self._kernel_spec, F, G, ctx)
+        return linop
 
-    def cross(self, F: ProbeStack, G: ProbeStack, ctx: OpContext) -> Array:
-        return F.kernel(G, self._kernel_spec, ctx)
-
-    def mean(self, F: ProbeStack, ctx: OpContext) -> Array:
-        return F.apply(self._mean_spec, ctx)[:, 0]
+    def mean(self, F: ProbeStack, ctx: OpContext) -> LinearLike:
+        return F.apply(self._mean_spec, ctx)
 
     # pytree (treat callables as aux if needed)
     def tree_flatten(self):

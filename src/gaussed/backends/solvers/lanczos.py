@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from gaussed.linops import LinearOp, AsLinearOp
+from gaussed.linops.linop import LinearOp, AsLinearOp, materialise_dense
 from gaussed.backends.solvers.linear_solver import LinearSolverState, SqrtFn, LogdetFn
 
 # ---------------------------
@@ -189,14 +189,15 @@ def lanczos_inv_sqrt_hook(k: int = 32, eps: float = 0.0) -> SqrtFn:
     SqrtFn: apply (A + eps I)^{-1/2} to rhs via two-pass Lanczos.
     Stateless: preserves incoming solver state.
     """
-    def _sqrt(op: LinearOp, rhs: Array, st: LinearSolverState):
+    def _sqrt(op: LinearOp, rhs: LinearOp, st: LinearSolverState):
         mv = (lambda x: op.mv(x) + eps * x) if eps != 0.0 else op.mv
-        if rhs.ndim == 1:
-            y = lanczos_apply_f(mv, rhs, k, f=lambda x: 1.0 / jnp.sqrt(jnp.clip(x, a_min=jnp.finfo(x.dtype).tiny)))
+        _rhs = materialise_dense(rhs)
+        if _rhs.ndim == 1:
+            y = lanczos_apply_f(mv, _rhs, k, f=lambda x: 1.0 / jnp.sqrt(jnp.clip(x, a_min=jnp.finfo(x.dtype).tiny)))
         else:
             y = jax.vmap(lambda col: lanczos_apply_f(mv, col, k, f=lambda x: 1.0 / jnp.sqrt(jnp.clip(x, a_min=jnp.finfo(x.dtype).tiny))),
                          in_axes=1, out_axes=1)(rhs)
-        return y, st  # keep caches from other hooks intact
+        return AsLinearOp(y), st  # keep caches from other hooks intact
     return _sqrt
 
 

@@ -6,8 +6,9 @@ import jax
 
 if TYPE_CHECKING:
     from gaussed.backends.solvers.quadrature import Quadrature, BiQuadrature
-    from gaussed.domains.base import Domain
 
+from gaussed.domains.base import Domain
+from gaussed.codomains.base import Codomain
 from gaussed.utils.shape_helpers import _enforce_event_shape, _ensure_n_by_d
 
 # === Function and Kernel Specs ===============================================
@@ -16,7 +17,7 @@ from gaussed.utils.shape_helpers import _enforce_event_shape, _ensure_n_by_d
 @dataclass(frozen=True)
 class FunSpec:
     eval: Callable[[Array], Array]                 # (n,*in_shape) -> (n,*out_shape)
-    out_shape: Tuple[int, ...] = field(default_factory=lambda: (1,))
+    codomain: Codomain = field(default_factory=lambda: Codomain((1,)))
 
     # Integral hook:
     # Try an analytic integral over a requested Y-domain. Return None if unsupported.
@@ -37,6 +38,7 @@ class FunSpec:
 class KernelSpec:
     # Base geometry domain (distance/geometry lives here fixed to kernel)
     domain: Domain
+    codomain: Codomain
 
     # Base kernel already bound to 'domain'
     k0: Callable[[Array, Array], Array]
@@ -59,13 +61,13 @@ class KernelSpec:
     d2_xy: Optional[Callable[[Array, Array, int, int], Array]] = None
 
     def __call__(self, X: Array, Y: Array) -> Array:
-        X = _ensure_n_by_d(X)
-        Y = _ensure_n_by_d(Y)
-        K = self.k0(X, Y)  # may return many shapes depending on implementation
-        return _enforce_event_shape(K, X.shape[0], Y.shape[0], self.left_shape, self.right_shape)
+        Xn = self.domain.ensure_inputs(X); Yn = self.domain.ensure_inputs(Y)
+
+        K = self.k0(Xn, Yn)  # may return many shapes depending on implementation
+        return self.codomain.enforce_kernel_shape(K, Xn.shape[0], Yn.shape[0], self.left_shape, self.right_shape)
 
     def tree_flatten(self):
-        children = (self.domain,)
+        children = (self.domain, self.codomain)
         aux = (self.k0, self.left_shape, self.right_shape,
                self.integrate_x_of, self.integrate_y_of, self.integrate_xy_of,
                self.d_dx, self.d_dy, self.d2_xx, self.d2_yy, self.d2_xy)
@@ -73,11 +75,11 @@ class KernelSpec:
 
     @classmethod
     def tree_unflatten(cls, aux, children):
-        (domain,) = children
+        (domain, codomain) = children
         (k0, lshape, rshape,
          ix_of, iy_of, ixy_of,
          d_dx, d_dy, d2_xx, d2_yy, d2_xy) = aux
-        return cls(domain, k0, lshape, rshape, ix_of, iy_of, ixy_of,
+        return cls(domain, codomain, k0, lshape, rshape, ix_of, iy_of, ixy_of,
                    d_dx, d_dy, d2_xx, d2_yy, d2_xy)
 
 
@@ -88,6 +90,7 @@ class KernelSpec:
 @dataclass(frozen=True)
 class OpContext:
     domain: Domain # used in quadrature methods / integral methods
+    codomain: Codomain
     # Defaults for numeric fallbacks
     quad: Optional["Quadrature"]   = None   # general unary/default
     quad_x: Optional["Quadrature"] = None   # integrate over X (left maps)
@@ -98,19 +101,23 @@ class OpContext:
     # pytree: treat callables as static aux
     def tree_flatten(self):
         # treat everything as children so array params trace cleanly
-        return ((self.domain, self.quad, self.quad_x, self.quad_y, self.quad_xy), ())
+        return ((self.domain, self.codomain, self.quad, self.quad_x, self.quad_y, self.quad_xy), ())
     @classmethod
     def tree_unflatten(cls, aux, ch):
-        dom, q, qx, qy, qxy = ch
-        return cls(dom, q, qx, qy, qxy)
+        dom, codom, q, qx, qy, qxy = ch
+        return cls(dom, codom, q, qx, qy, qxy)
 
 
 # === Operator + Functional protocol ===================================
 
 class Operator(Protocol):
-    def __call__(self, g: FunSpec) -> FunSpec: ...
+    def __call__(self, g: FunSpec, ctx: OpContext) -> FunSpec: ...
     def lift_left(self, ks: KernelSpec, ctx: OpContext) -> KernelSpec: ...
     def lift_right(self, ks: KernelSpec, ctx: OpContext) -> KernelSpec: ...
+
+    def output_codomain(self, cod: "Codomain", dom: "Domain") -> "Codomain": ...
+    def map_left_shape(self, left_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]: ...
+    def map_right_shape(self, right_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]: ...
 
 
 class Functional(Protocol):
@@ -126,4 +133,16 @@ class Functional(Protocol):
     # default pair implementation (needs to be copied to all classes following this protocol)
     def pair(self, other: "Functional", ks: KernelSpec, ctx: OpContext) -> Array: ...
 
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class ShapeNeutralOp:
+    def output_codomain(self, cod: "Codomain", dom: "Domain") -> "Codomain":
+        return cod
+    def map_left_shape(self, left_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]:
+        return left_shape
+    def map_right_shape(self, right_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]:
+        return right_shape
+    def tree_flatten(self): return (), ()
+    @classmethod
+    def tree_unflatten(cls, aux, ch): return cls()
 

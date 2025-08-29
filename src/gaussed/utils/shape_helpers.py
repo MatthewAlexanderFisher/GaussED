@@ -17,6 +17,15 @@ def _ensure_n_by_d(x: Array) -> Array:
 def _prod(shape: Tuple[int, ...]) -> int:
     return int(jnp.prod(jnp.array(shape))) if shape else 1
 
+def _append(shape: Tuple[int, ...], *more: int) -> Tuple[int, ...]:
+    return tuple(shape) + tuple(more)
+
+def _append_full(shape: Tuple[int, ...], tail: Tuple[int, ...]) -> Tuple[int, ...]:
+    return (*shape, *tail)
+
+def _append_flat(shape: Tuple[int, ...], in_shape: Tuple[int, ...]) -> Tuple[int, ...]:
+    return (*shape, _prod(in_shape))
+
 
 def ensure_n_by_shape(X: Array, item_shape: Tuple[int, ...]) -> Array:
     """Coerce X to (n, *item_shape). Accepts (n, *item_shape) or (*item_shape,) (n=1)."""
@@ -84,3 +93,67 @@ def _flatten_for_solver(K: Array) -> Array:
                             int(jnp.prod(jnp.array(ey) or jnp.array([1]))))
     K4 = jnp.transpose(K4, (0, 2, 1, 3))
     return K4.reshape(n_x * K4.shape[1], n_y * K4.shape[3])
+
+# Pack event dimensions into a matrix (used to coerce LinOp format)
+def pack_ev2mat(K: Array,
+                left_shape: Tuple[int, ...],
+                right_shape: Tuple[int, ...]) -> Array:
+    """(n_x, n_y, *L, *R) -> (n_x*|L|, n_y*|R|)"""
+    n_x, n_y = K.shape[:2]
+    return K.reshape(n_x * _prod(left_shape), n_y * _prod(right_shape))
+
+def unpack_mat2ev(M: Array,
+                  n_x: int, n_y: int,
+                  left_shape: Tuple[int, ...],
+                  right_shape: Tuple[int, ...]) -> Array:
+    """(n_x*|L|, n_y*|R|) -> (n_x, n_y, *L, *R)"""
+    return M.reshape(n_x, n_y, *left_shape, *right_shape)
+
+
+def _as_2d(V: Array):
+    return (V[:, None], True) if V.ndim == 1 else (V, False)
+
+def _restore(U: Array, was_vec: bool):
+    return U.squeeze(-1) if was_vec else U
+
+
+def pack_vec(v_raw: Array, out_shape: Tuple[int, ...]) -> Array:
+    """(n, *out_shape) -> (n*L, 1). Scalar-out -> (n,1)."""
+    v_raw = jnp.asarray(v_raw)
+    n = v_raw.shape[0]
+    L = _prod(out_shape) if out_shape else 1
+    return v_raw.reshape(n * L, 1)
+
+def pack_vec_flat(v_raw: Array, out_shape: Tuple[int, ...]) -> Array:
+    """(n, *out_shape) -> (n*L,). Keep only if you really need 1-D."""
+    v_raw = jnp.asarray(v_raw)
+    n = v_raw.shape[0]
+    L = _prod(out_shape) if out_shape else 1
+    return v_raw.reshape(n * L,)
+
+
+def unpack_vec(v_flat: Array, n: int, out_shape: Tuple[int, ...]) -> Array:
+    """(n*L,) -> (n, *out_shape). Scalar-out: (n,) stays (n,)."""
+    v_flat = jnp.asarray(v_flat)
+    if not out_shape:
+        return v_flat.reshape(n,)
+    return v_flat.reshape((n, *out_shape))
+
+def pack_kernel(K_raw: Array, out_shape: Tuple[int, ...]) -> Array:
+    """(nF, nG, *out_shape, *out_shape) -> (nF*L, nG*L)."""
+    nF, nG = K_raw.shape[:2]
+    L = _prod(out_shape) if out_shape else 1
+    return K_raw.reshape(nF * L, nG * L)
+
+def _flatten_kernel(K_raw: Array) -> Tuple[Array, int, Tuple[int, ...]]:
+    """(nF,nG,*out,*out) -> (nF*L, nG*L), L, out_shape"""
+    nF, nG = K_raw.shape[:2]
+    out_shape = tuple(K_raw.shape[2:])
+    L = _prod(out_shape) if out_shape else 1
+    return K_raw.reshape(nF * L, nG * L), L, out_shape
+
+def _unflatten_var_diag(v_flat: Array, nG: int, out_shape: Tuple[int, ...]) -> Array:
+    """(nG*L,) -> (nG,*out) or (nG,) when scalar."""
+    if not out_shape:
+        return v_flat.reshape(nG,)
+    return v_flat.reshape((nG, *out_shape))

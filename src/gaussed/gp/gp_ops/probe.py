@@ -18,7 +18,7 @@ class Probe:
 
     # unary
     def apply(self, g: FunSpec, ctx: OpContext) -> Array:
-        for op in self.ops: g = op(g)
+        for op in self.ops: g = op(g, ctx)
         return self.fnl(g, ctx)
 
     # binary (kernel)

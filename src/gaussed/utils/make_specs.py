@@ -8,6 +8,7 @@ import jax
 from gaussed.gp.kernels.base import Kernel
 from gaussed.gp.means import MeanFun
 from gaussed.domains.base import Domain
+from gaussed.codomains.base import Codomain
 from gaussed.gp.gp_ops.base import KernelSpec, FunSpec
 from gaussed.utils.shape_helpers import _ensure_n_by_d
 
@@ -15,6 +16,7 @@ from gaussed.utils.shape_helpers import _ensure_n_by_d
 def make_kernel_spec(
     kernel: Kernel,                     # e.g. an RBFKernel instance with __call__(x,y,domain)
     domain: Domain,
+    codomain: Codomain
 ) -> KernelSpec:
     # Fast path: kernel already has a batched __call__(X,Y,domain)
     if hasattr(kernel, "__call__"):
@@ -45,6 +47,7 @@ def make_kernel_spec(
 
     return KernelSpec(
         domain=domain,
+        codomain=codomain,
         k0=k0,
         left_shape=kernel.left_shape,
         right_shape=kernel.right_shape,
@@ -58,6 +61,7 @@ def make_kernel_spec(
 def make_fun_spec(
     mean: MeanFun,                   
     domain: Domain,
+    codomain: Codomain
 ) -> FunSpec:
     def eval(X: Array) -> Array:
         return mean(X, domain)
@@ -71,6 +75,7 @@ def make_fun_spec(
 
     return FunSpec(
         eval=eval,
+        codomain=codomain,
         integrate=ix_of,
         partial=partial,
         partial2=partial2,

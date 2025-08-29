@@ -7,7 +7,7 @@ from jax import Array
 from jax.typing import DTypeLike
 
 from gaussed.utils.constraints import Positive, Transform, TriLPositive
-from gaussed.linops import LinearOp, ScaledIdentityOp, DiagOp, DenseOp, SumOp, BlockDiagOp
+from gaussed.linops.linop import LinearOp, ScaledIdentityOp, DiagOp, DenseOp, SumOp, BlockDiagOp
 
 class NoiseSpec:
     """Gaussian observation noise."""
@@ -62,8 +62,11 @@ class DiagonalNoise(NoiseSpec):
 
     def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp:
         d = self.diag().astype(dtype)
-        assert d.shape[0] == n
-        return DiagOp(d)
+        if d.shape[0] != n:
+            d_arr = jnp.ones((n,), dtype=dtype) * d.mean()
+        else:
+            d_arr = d
+        return DiagOp(d_arr)
     
     def tree_flatten(self): 
         return (self.raw,), (self.transform,)

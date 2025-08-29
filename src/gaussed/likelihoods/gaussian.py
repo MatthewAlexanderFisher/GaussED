@@ -7,7 +7,7 @@ import jax.numpy as jnp
 
 from gaussed.likelihoods.gaussian_noise import NoiseSpec, Noiseless
 from gaussed.gp.base import GP, PosteriorGP
-from gaussed.linops import LinearOp, SumOp, AsLinearOp
+from gaussed.linops.linop import LinearOp, SumOp, AsLinearOp
 from gaussed.types import LinearLike
 
 @jax.tree_util.register_pytree_node_class

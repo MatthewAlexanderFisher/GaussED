@@ -18,7 +18,8 @@ from gaussed.gp.gp_ops.base import FunSpec, KernelSpec
 from gaussed.utils.make_specs import make_fun_spec, make_kernel_spec
 from gaussed.backends.reps.base import CovRep
 from gaussed.backends.solvers.linear_solver import LinearSolver
-
+from gaussed.linops.linop import LinearOp, AsLinearOp, materialise_dense
+from gaussed.utils.shape_helpers import unpack_vec, pack_vec, _flatten_kernel, _unflatten_var_diag
 
 import jax
 import jax.numpy as jnp
@@ -39,10 +40,10 @@ class GP:
 
     # Bridge to specs
     def mean_spec(self) -> "FunSpec":
-        return make_fun_spec(self.mean, self.domain)
+        return make_fun_spec(self.mean, self.domain, self.codomain)
 
     def kernel_spec(self) -> "KernelSpec":
-        return make_kernel_spec(self.kernel, self.domain)
+        return make_kernel_spec(self.kernel, self.domain, self.codomain)
 
     # --- pytree plumbing ---
     # Children: mean, kernel, backend (to trace their params/state)
@@ -89,36 +90,79 @@ class PosteriorGP:
     F: "ProbeStack"        # child
     ctx: "OpContext"       # aux (static config)
     solver: "LinearSolver" # child (stateful cache)
-    alpha: jnp.ndarray     # child
-    y: jnp.ndarray         # child
-    mF: jnp.ndarray        # child
+    alpha: Array   # expected (n_F, 1) in the scalar-as-(1,) convention
+    y: Array       # (n_F, 1) in the scalar case
+    mF: Array      # (n_F, 1) in the scalar case
 
     # Predictive mean at G
-    def mean(self, G: "ProbeLike") -> jnp.ndarray:
+    def mean(self, G: "ProbeLike") -> Array:
         Gst = as_stack(G)
-        mG = self.rep.mean(Gst, self.ctx)                      # (n_G,)
-        K_GF = self.rep.cross(Gst, self.F, self.ctx)           # (n_G, n_F)
-        return mG + K_GF @ self.alpha
+
+        mG_raw = materialise_dense(self.rep.mean(Gst, self.ctx))    # (nG, *out_shape)
+        out_shape = tuple(mG_raw.shape[1:])
+        nG = mG_raw.shape[0]
+        mG_col = pack_vec(mG_raw, out_shape)                        # (nG*L, 1)
+
+        # cross block with **left=test, right=train**
+        KGF_raw = materialise_dense(self.rep.gram(Gst, self.F, self.ctx))  # (nG, nF, *out, *out)
+        K_GF    = AsLinearOp(KGF_raw)                                      # (nG*L, nF*L)
+
+        contrib_col = K_GF.mv(self.alpha)                            # (nG*L, 1)
+        mu_col = mG_col + contrib_col                                # (nG*L, 1)
+        return unpack_vec(mu_col, nG, out_shape)                     # (nG,*out) or (nG,)
+
 
     # Predictive variance diag at G (scalar-output case)
-    def variance(self, G: "ProbeLike") -> jnp.ndarray:
+    def variance(self, G: "ProbeLike") -> Array:
         Gst = as_stack(G)
-        K_GG = self.rep.cross(Gst, Gst, self.ctx)              # (n_G, n_G)
-        K_GF = self.rep.cross(Gst, self.F, self.ctx)           # (n_G, n_F)
-        # Solve (K_FF+Σ)^{-1} K_FG, with multiple RHS columns
-        K_FG = K_GF.T                                          # (n_F, n_G)
-        W = self.solver.solve(K_FG)                     # (n_F, n_G)
-        C = K_GF @ W                                           # (n_G, n_G)
-        return jnp.clip(jnp.diag(K_GG) - jnp.diag(C), a_min=0.)
+
+        # Raw kernels
+        KGG_raw = materialise_dense(self.rep.gram(Gst, Gst, self.ctx))      # (nG,nG,*out,*out)
+        KGF_raw = materialise_dense(self.rep.gram(Gst, self.F, self.ctx))   # (nG,nF,*out,*out)
+
+        out_shape = tuple(KGG_raw.shape[2:])
+
+        # Wrap as LinearOps
+        K_GG = AsLinearOp(KGG_raw)
+        K_GF = AsLinearOp(KGF_raw)
+        K_FG = K_GF.T                                                       # (nF*L, nG*L)
+
+        # Solve (K_FF+Σ)^{-1} K_FG  (multiple RHS)
+        W = self.solver.solve(K_FG)                                         # (nF*L, nG*L)
+
+        # Compute K_GF @ W -> (nG*L, nG*L), then take diag
+        C = K_GF.mv(materialise_dense(W))                                   # (nG*L, nG*L)
+        var_flat = jnp.clip(K_GG.diag() - jnp.diag(C), a_min=0.0)           # (nG*L,)
+
+        # Return in raw shape convention: (nG,*out) or (nG,) for scalar
+        nG = KGG_raw.shape[0]
+        return _unflatten_var_diag(var_flat, nG, out_shape)
+
 
     # Full covariance (small n_G)
-    def covariance(self, G: "ProbeLike") -> jnp.ndarray:
+    def covariance(self, G: "ProbeLike") -> Array:
         Gst = as_stack(G)
-        K_GG = self.rep.cross(Gst, Gst, self.ctx)              # (n_G, n_G)
-        K_GF = self.rep.cross(Gst, self.F, self.ctx)           # (n_G, n_F)
-        K_FG = K_GF.T
-        W = self.solver.solve(K_FG)                     # (n_F, n_G)
-        return K_GG - K_GF @ W
+
+        # Raw kernels
+        KGG_raw = materialise_dense(self.rep.gram(Gst, Gst, self.ctx))      # (nG,nG,*out,*out)
+        KGF_raw = materialise_dense(self.rep.gram(Gst, self.F, self.ctx))   # (nG,nF,*out,*out)
+
+        # Flatten
+        K_GG_dense, L, out_shape = _flatten_kernel(KGG_raw)                 # (nG*L, nG*L)
+        K_GF_dense, _, _        = _flatten_kernel(KGF_raw)                  # (nG*L, nF*L)
+
+        K_GF = LinearOp.from_dense(K_GF_dense)
+        K_FG = K_GF.T                                                       # (nF*L, nG*L)
+
+        W = self.solver.solve(K_FG)                                         # (nF*L, nG*L)
+        S = K_GF.mv(materialise_dense(W))                                   # (nG*L, nG*L)
+        Cov_flat = K_GG_dense - S                                           # (nG*L, nG*L)
+
+        # Reshape back to raw convention
+        nG = KGG_raw.shape[0]
+        if not out_shape:
+            return Cov_flat.reshape(nG, nG)
+        return Cov_flat.reshape(nG, nG, *out_shape, *out_shape)
 
     # --- pytree plumbing ---
     def tree_flatten(self):

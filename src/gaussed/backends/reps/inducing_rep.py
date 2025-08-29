@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from jax import Array
 import jax.numpy as jnp
 import jax
@@ -8,7 +8,8 @@ from gaussed.gp.gp_ops.base import KernelSpec, FunSpec, OpContext
 from gaussed.gp.gp_ops.probe import Probe
 from gaussed.types import LinearLike
 from gaussed.gp.gp_ops.point_eval import Eval
-from gaussed.linops import LinearOp
+from gaussed.linops.linop import LinearOp
+from gaussed.linops.constructors import LinOpConstructor, DenseGramConstructor
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class InducingRep:
     kernel_spec: KernelSpec
     mean_spec: FunSpec
     Z: Array                  # (m, d)
+    linop_constructor: LinOpConstructor = field(default_factory=lambda: DenseGramConstructor())  # default mv
     jitter: float = 1e-6
 
     # cached factors could be added; for clarity we factor on demand here
