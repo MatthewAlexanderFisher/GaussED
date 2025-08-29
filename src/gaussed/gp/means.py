@@ -12,4 +12,4 @@ class ZeroMeanFun:
 
     def __call__(self, X: Array, domain: Domain) -> Array:
         # X of shape (batch_shape, event_shape)
-        return jnp.zeros(X.shape[0])
+        return jnp.zeros(X.shape)

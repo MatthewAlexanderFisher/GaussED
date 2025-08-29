@@ -26,7 +26,7 @@ class CGCache:
         (x0, M) = children
         return cls(x0, M)
 
-# ===== Block-append update SVD (Brand algorithm) =====
+# ===== CG solve hook =====
 
 def cg_solve_hook(tol: float = 1e-6, maxiter: int = 200, M: Optional[LinearLike] = None) -> SolveFn:
     Mop = None if M is None else AsLinearOp(M)

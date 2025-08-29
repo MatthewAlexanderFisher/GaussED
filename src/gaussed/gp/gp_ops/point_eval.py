@@ -23,7 +23,7 @@ class Eval:
         X = self.X
 
         def f_eval(Y: Array) -> Array:     # (q_y,d) -> (n_x, q_y)
-            return ks.k0(X, Y)
+            return ks.__call__(X, Y)
 
         # Maybe-analytic integral over Y: integrate_y_of(domY) -> Optional[EvalFn]
         f_integrate: Optional[Callable[[Domain], Optional[Array]]] = None

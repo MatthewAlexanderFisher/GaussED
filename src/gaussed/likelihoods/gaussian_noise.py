@@ -9,8 +9,6 @@ from jax.typing import DTypeLike
 from gaussed.utils.constraints import Positive, Transform, TriLPositive
 from gaussed.linops import LinearOp, ScaledIdentityOp, DiagOp, DenseOp, SumOp, BlockDiagOp
 
-@jax.tree_util.register_pytree_node_class
-@dataclass
 class NoiseSpec:
     """Gaussian observation noise."""
     def as_op(self, n: int, dtype: Optional[DTypeLike]) -> LinearOp: ...
@@ -21,7 +19,7 @@ class NoiseSpec:
     # Dense (for exact Cholesky) if needed
     def as_matrix(self, n: int, dtype) -> Array:
         return self.as_op(n, dtype).to_dense()
-
+    
 
 #------- Constant Noise Variance σ * I ------------------------------------------------------
 @jax.tree_util.register_pytree_node_class

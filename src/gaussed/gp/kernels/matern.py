@@ -42,6 +42,25 @@ class MaternKernel:
     left_shape: Tuple[int, ...] = field(default_factory=tuple)
     right_shape: Tuple[int, ...] = field(default_factory=tuple)
 
+    def pair(self, x, y, domain):
+
+        lengthscale, amplitude = self.get_transformed_params()
+
+        r = domain.pairwise_geometry(x, y) / lengthscale
+        nu = self.params.nu
+        if nu == 1.5:
+            a = jnp.sqrt(3.0); poly = 1.0 + a*r
+            return amplitude * poly * jnp.exp(-a*r)
+        elif nu == 2.5:
+            a = jnp.sqrt(5.0); poly = 1.0 + a*r + (5.0/3.0)*r*r
+            return amplitude * poly * jnp.exp(-a*r)
+        elif nu == 3.5:  # 7/2
+            a = jnp.sqrt(7.0); r2 = r*r; r3 = r2*r
+            poly = 1.0 + a*r + (14.0/5.0)*r2 + (7.0*a/15.0)*r3
+            return amplitude * poly * jnp.exp(-a*r)
+        else:
+            raise ValueError("Supported ν: 3/2, 5/2, 7/2 only.")
+
     def __call__(self, x, y, domain):
 
         lengthscale, amplitude = self.get_transformed_params()
@@ -60,7 +79,8 @@ class MaternKernel:
             return amplitude * poly * jnp.exp(-a*r)
         else:
             raise ValueError("Supported ν: 3/2, 5/2, 7/2 only.")
-    
+
+
     def get_transformed_params(self):
         return (self.lengthscale_transform.forward(self.params.lengthscale),
                 self.amplitude_transform.forward(self.params.amplitude))

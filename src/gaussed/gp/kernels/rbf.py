@@ -8,6 +8,7 @@ from gaussed.domains.base import Domain
 from gaussed.utils.constraints import Positive, Transform
 
 
+
 # --- RBF / Squared-Exponential / Gaussian ------------------------------------
 @jax.tree_util.register_pytree_node_class
 @dataclass
@@ -39,6 +40,12 @@ class RBFKernel:
     # tensor-kernel interface (static; not part of pytree children)
     left_shape: Tuple[int, ...] = field(default_factory=tuple)
     right_shape: Tuple[int, ...] = field(default_factory=tuple)
+
+    # scalar pair (x: (d,), y: (d,)) -> ()
+    def pair(self, x: Array, y: Array, domain: "Domain") -> Array:
+        lengthscale, amplitude = self.get_transformed_params()   # ℓ > 0, σ² > 0
+        r = domain.pairwise_geometry(x, y) / (lengthscale + 1e-12)
+        return amplitude * jnp.exp(-0.5 * r * r)
 
 
     def __call__(self, x: Array, y: Array, domain: Domain) -> Array:

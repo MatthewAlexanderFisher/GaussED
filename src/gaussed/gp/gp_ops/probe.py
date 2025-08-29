@@ -7,6 +7,7 @@ import jax
 
 from gaussed.gp.gp_ops.base import Operator, Functional, OpContext, FunSpec, KernelSpec
 from gaussed.types import ProbeLike
+from gaussed.utils.shape_helpers import _ensure_n_by_d
 
 # === Probe is a symbolic chain of Operators with a reducer ===============
 @jax.tree_util.register_pytree_node_class

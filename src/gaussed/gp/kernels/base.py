@@ -15,6 +15,8 @@ class Kernel(Protocol):
 
     def __call__(self, x: Array, y: Array, domain: Domain) -> Array: ...
 
+    def pair(self, x: Array, y:Array, domain: Domain) -> Array: ...
+
 
 
 @jax.tree_util.register_pytree_node_class
@@ -28,6 +30,9 @@ class KernelFunc:
     right_shape: Tuple[int, ...]
 
     def __call__(self, x: Array, y: Array, domain: Domain) -> Array:
+        return self.fn(x, y, domain, self.params)
+
+    def pair(self, x: Array, y: Array, domain: Domain) -> Array:
         return self.fn(x, y, domain, self.params)
 
     # pytree plumbing

@@ -6,7 +6,6 @@ import jax
 
 from gaussed.linops import LinearOp, DenseOp, AsLinearOp
 from gaussed.types import LinearLike
-from gaussed.backends.solvers.cholesky import CholCache, chol_extend_block
 
 # -------------------------------------------------------------------
 # Stateful solver: mix-and-match hooks + cache
@@ -82,13 +81,13 @@ class LinearSolver:
         return replace(self, op=AsLinearOp(new_op), state=LinearSolverState(None))
 
     # expose block-append for Cholesky caches (no-op otherwise)
-    def extend_block(self, B: Array, C: Array, jitter: float = 0.0) -> "LinearSolver":
-        cache = self.state.cache
-        if isinstance(cache, CholCache):
-            new_cache = chol_extend_block(cache, B, C, jitter)
-            return replace(self, state=LinearSolverState(new_cache))
-        # If cache type doesn't support, just return self 
-        return self
+    # def extend_block(self, B: Array, C: Array, jitter: float = 0.0) -> "LinearSolver":
+    #     cache = self.state.cache
+    #     if isinstance(cache, CholCache):
+    #         new_cache = chol_extend_block(cache, B, C, jitter)
+    #         return replace(self, state=LinearSolverState(new_cache))
+    #     # If cache type doesn't support, just return self 
+    #     return self
 
     # pytree
     def tree_flatten(self):

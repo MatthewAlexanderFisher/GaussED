@@ -2,20 +2,34 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple, Callable, Optional
 from jax import Array
+import jax
 
 
 from gaussed.gp.kernels.base import Kernel
 from gaussed.gp.means import MeanFun
 from gaussed.domains.base import Domain
 from gaussed.gp.gp_ops.base import KernelSpec, FunSpec
+from gaussed.utils.shape_helpers import _ensure_n_by_d
 
 
 def make_kernel_spec(
     kernel: Kernel,                     # e.g. an RBFKernel instance with __call__(x,y,domain)
     domain: Domain,
 ) -> KernelSpec:
-    def k0(X: Array, Y: Array) -> Array:
-        return kernel(X, Y, domain)
+    # Fast path: kernel already has a batched __call__(X,Y,domain)
+    if hasattr(kernel, "__call__"):
+        def k0(X: Array, Y: Array) -> Array:
+            return kernel(_ensure_n_by_d(X), _ensure_n_by_d(Y), domain)
+    else:
+        # Fallback: double vmap over scalar pair(x,y,domain)
+        if not hasattr(kernel, "pair"):
+            raise TypeError("Kernel must implement __call__ or pair(x,y,domain).")
+
+        def k0(X: Array, Y: Array) -> Array:
+            Xn, Yn = _ensure_n_by_d(X), _ensure_n_by_d(Y)
+            def row_map(x):
+                return jax.vmap(lambda y: kernel.pair(x, y, domain))(Yn)  # (n_y, *L, *R)
+            return jax.vmap(row_map)(Xn)  # (n_x, n_y, *L, *R)
 
     # Pass through factories if present; integrate methods return Optional
     ix_of  = getattr(kernel, "integrate_x_of", None)

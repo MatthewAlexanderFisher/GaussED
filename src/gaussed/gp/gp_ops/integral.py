@@ -87,7 +87,7 @@ class Integral:
 
             # 2) Dedicated bi-quadrature
             if ctx.quad_xy is not None:
-                return ctx.quad_xy.apply2(ks.k0, domX, domY)
+                return ctx.quad_xy.apply2(ks.__call__, domX, domY)
 
         # 3) Fallback composition
         F = self.left_kernel_map(ks, ctx)
@@ -123,5 +123,5 @@ def _pick_integrate_x(ks: KernelSpec, domX: Domain, qx: Optional[Quadrature]) ->
             return f
     if qx is None:
         raise ValueError("Integral.left_kernel_map: need quad_x (or self.quad/ctx.quad) when no analytic integrate_x.")
-    k0 = ks.k0
+    k0 = ks.__call__
     return lambda Y, qx=qx, domX=domX, k0=k0: qx.apply(lambda X: k0(X, Y), domX)

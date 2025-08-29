@@ -1,11 +1,16 @@
+from __future__ import annotations
 from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 from jax import Array
+from typing import TYPE_CHECKING
 
-from gaussed.backends.solvers.linear_solver import LinearSolverState, SolveFn, SqrtFn, LogdetFn
+if TYPE_CHECKING:
+    from gaussed.backends.solvers.linear_solver import SolveFn, SqrtFn, LogdetFn
+
+
+from gaussed.backends.solvers.linear_solver import LinearSolverState
 from gaussed.linops import LinearOp, AsLinearOp
-from gaussed.types import LinearLike
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)

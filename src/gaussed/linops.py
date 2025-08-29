@@ -181,7 +181,6 @@ class LinearOp:
             return cls(A=A, mv=mv, rmv=rmv, to_dense=to_dense)
         return cls(shape, mv=mv, rmv=rmv, to_dense=to_dense)
 
-
 # Convenience constructors
 def DenseOp(A: Array) -> LinearOp:
     n, m = A.shape
@@ -224,10 +223,10 @@ def BlockDiagOp(blocks: tuple[LinearOp, ...]) -> LinearOp:
         return jax.scipy.linalg.block_diag(*mats)
     return LinearOp((n, n), mv=mv, rmv=mv, to_dense=to_dense)
 
-def AsLinearOp(A: LinearLike) -> LinearOp:
+def AsLinearOp(A: "LinearLike") -> LinearOp:
     return A if isinstance(A, LinearOp) else DenseOp(A)
 
-def materialise_dense(A: LinearLike) -> Array:
+def materialise_dense(A: "LinearLike") -> Array:
     return A if isinstance(A, Array) else A.to_dense()
 
 

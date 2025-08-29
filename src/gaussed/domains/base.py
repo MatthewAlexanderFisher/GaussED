@@ -1,12 +1,12 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Tuple, Optional, Callable, Any
+from typing import Tuple, Optional, Callable, Any, Protocol
 import jax
 import jax.numpy as jnp
 from jax import tree_util as jtu
 from jax import Array
 
-class Domain:
+class Domain(Protocol):
     @property
     def event_shape(self) -> Tuple[int, ...]: ...
     def project(self, x: Array) -> Array: ...

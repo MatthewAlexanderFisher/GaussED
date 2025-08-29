@@ -52,7 +52,7 @@ class Partial:
                               integrate_x_of=None, integrate_y_of=None, integrate_xy_of=None)
 
         # AD fallback
-        k0p = _partial_rows_x(ks.k0, ax)  # ∂/∂x_ax k
+        k0p = _partial_rows_x(ks.__call__, ax)  # ∂/∂x_ax k
         # Offer mixed x–y derivatives so a future right-lift can reuse them cheaply
         def d_dy(X: Array, Y: Array, j: int) -> Array:
             _, dy = jax.jvp(lambda Y_: k0p(X, Y_), (Y,), (_dir_tangent_like(Y, j),))
@@ -82,7 +82,7 @@ class Partial:
                               integrate_x_of=None, integrate_y_of=None, integrate_xy_of=None)
 
         # AD fallback
-        k0p = _partial_rows_y(ks.k0, ay)  # ∂/∂y_ay k
+        k0p = _partial_rows_y(ks.__call__, ay)  # ∂/∂y_ay k
         def d_dx(X: Array, Y: Array, i: int) -> Array:
             _, dx = jax.jvp(lambda X_: k0p(X_, Y), (X,), (_dir_tangent_like(X, i),))
             return dx
