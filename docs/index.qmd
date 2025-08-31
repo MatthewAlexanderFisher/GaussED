@@ -1,6 +1,6 @@
 ---
 title: "GaussED"
-author: ""
+author: "Matthew Fisher"
 project:
   type: website
 #   output-dir: /docs
@@ -14,7 +14,7 @@ format:
     fig-align: center
     margin: 0.02        # default ~0.04; smaller = slide closer to edges
     embed-resources: true   # inlines images/CSS/JS
-
+    math: none
     highlight-style: dracula
     # toc: true
     include-in-header: 
