@@ -99,3 +99,96 @@
 
 /* (Some outputs wrap images in <figure><p><img>...) */
 .reveal .slides .cell-output figure { margin-bottom: 1.25rem; }
+
+:root {
+  /* slide bg */
+  --mermaid-bg-color: #212946;
+
+  /* light text for graph labels */
+  --mermaid-fg-color: #E6E9EF;
+
+  /* nodes */
+  --mermaid-node-bg-color: #2A324D;  /* darker tile */
+  --mermaid-node-fg-color: #E6E9EF;
+  --mermaid-node-border:   #49557A;
+
+  /* subgraph/cluster */
+  --mermaid-cluster-bg:    #1A2138;   /* darker panel */
+  --mermaid-cluster-border: #49557A;
+  --mermaid-cluster-fg:    #E6E9EF;
+
+  --mermaid-fg-color--lighter: #49557A; 
+  --mermaid-fg-color--lightest: #1A2138;
+
+  /* edges / labels */
+  --mermaid-edge-color:    #08F7FE;  
+  --mermaid-label-fg-color:#E6E9EF;
+  --mermaid-label-bg-color: transparent;
+
+  --mermaid-edgeLabel-color: #08F7FE;  
+  /* font */
+  --mermaid-font-family: "Iosevka", Times, serif;
+}
+
+/* --------- global --------- */
+.reveal .mermaid {
+  background: transparent;                  /* inherit slide bg */
+  color: var(--mermaid-fg-color);
+  font-family: var(--mermaid-font-family);
+}
+
+/* default text/labels */
+.reveal .mermaid text,
+.reveal .mermaid .label,
+.reveal .mermaid .nodeLabel,
+.reveal .mermaid .cluster text {
+  fill: var(--mermaid-fg-color);
+}
+
+/* edges and arrow shafts */
+.reveal .mermaid .edgePath path,
+.reveal .mermaid .flowchart-link {
+  stroke: var(--mermaid-edge-color);
+  stroke-width: 2px;
+}
+
+/* edge labels */
+.reveal .mermaid .edgeLabel rect {
+  fill: var(--mermaid-label-bg-color);
+  stroke: transparent;
+}
+.reveal .mermaid .edgeLabel .label {
+  fill: var(--mermaid-label-fg-color);
+}
+
+/* nodes */
+.reveal .mermaid .node rect,
+.reveal .mermaid .node circle,
+.reveal .mermaid .node polygon {
+  fill: var(--mermaid-node-bg-color);
+  stroke: var(--mermaid-node-border);
+  stroke-width: 1.2px;
+}
+.reveal .mermaid .node .label {
+  fill: var(--mermaid-node-fg-color);
+}
+
+/* subgraph / cluster panels */
+.reveal .mermaid .cluster rect {
+  fill: var(--mermaid-cluster-bg);
+  stroke: var(--mermaid-cluster-border);
+  stroke-width: 1.5px;
+}
+.reveal .mermaid .cluster text {
+  fill: var(--mermaid-cluster-fg);
+}
+
+/* make the SVG scale nicely on slides */
+.reveal .mermaid svg {
+  width: 100% !important;
+  height: auto !important;
+}
+
+
+:root { --accent: #FE53BB; }              /* your pink */
+.reveal strong { color: var(--accent) !important; }  /* affects **bold** */
