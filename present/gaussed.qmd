@@ -1,0 +1,703 @@
+---
+title: "GaussED"
+author: ""
+editor:
+  render-on-save: true
+format:
+  revealjs:
+    theme: [moon, custom.scss]
+    css: mathjax-guard.css
+    fig-align: center
+    margin: 0.02        # default ~0.04; smaller = slide closer to edges
+
+    highlight-style: dracula
+    # toc: true
+    include-in-header: 
+      - mathjax-config.html 
+      # - font.html
+    incremental: true
+    navigation-mode: vertical   # enables up/down within stacks
+    slide-number: h.v           # show 1.2 style numbering
+    # controls-layout: bottom-right
+    controls-tutorial: true
+    code-fold: true       # collapsible code blocks
+    code-tools: true      # show a small code/clipboard toolbar
+
+execute:
+  echo: true              # show code by default (set false to hide globally)
+  # fig-width: 9
+  # fig-height: 3
+  # fig-dpi: 100
+  # fig-align: center
+
+jupyter: python3
+---
+
+# Introductions
+
+Welcome!
+
+```{python}
+import jax
+from jax import config
+import jax.numpy as jnp
+from jax import Array
+import numpy as np
+config.update("jax_enable_x64", True)  # do this at the very top
+
+import matplotlib.pyplot as plt
+
+import mplcyberpunk
+plt.style.use("cyberpunk")
+
+plt.rcParams["figure.figsize"] = (5, 3)
+plt.rcParams["text.usetex"] = True
+plt.rcParams["font.family"] = "serif"
+plt.rcParams["font.serif"] = ["Computer Modern Roman"]  # matches LaTeX default
+
+
+from gaussed.domains import Euclidean
+from gaussed.domains.index import IndexDomain
+from gaussed.codomains import Codomain
+
+from gaussed.gp.gp_ops.base import KernelSpec, FunSpec
+from gaussed.gp.gp_ops.point_eval import Eval
+from gaussed.gp.gp_ops.partial import Partial
+from gaussed.gp.gp_ops.grad import Grad
+from gaussed.gp.gp_ops.affine import Affine
+from gaussed.gp.gp_ops.weighted_eval import WeightedEval
+from gaussed.gp.gp_ops.probe import Probe, ProbeStack, as_stack
+from gaussed.gp.gp_ops.linearise import Linearise
+
+from gaussed.gp.kernels.rbf import RBFKernel, RBFParams
+from gaussed.gp.kernels.matern import MaternKernel, MaternParams
+from gaussed.gp.kernels.imq import IMQKernel, IMQParams
+from gaussed.gp.kernels.delta import DeltaKernel, DeltaParams
+from gaussed.gp.kernels.stacked import StackedKernel
+from gaussed.gp.kernels.coregional import CoregionParams, CoregionalKernel
+from gaussed.gp.means import ZeroMeanFun
+from gaussed.gp.base import GP, PosteriorGP
+
+from gaussed.model import GPModel
+from gaussed.utils.shape_helpers import pack_ev2mat
+
+from gaussed.backends.base import ExactBackend
+from gaussed.backends.solvers.linear_solver import SolverFns
+from gaussed.backends.solvers.cholesky import (
+    chol_solve_hook,
+    chol_sqrt_hook,
+    chol_logdet_hook,
+)
+from gaussed.backends.solvers.svd import svd_solve_hook, svd_sqrt_hook, svd_logdet_hook
+
+from gaussed.likelihoods.gaussian import GaussianLikelihood
+from gaussed.likelihoods.gaussian_noise import DiagonalNoise
+
+solver_fns = SolverFns(svd_solve_hook(), svd_sqrt_hook(), svd_logdet_hook())
+```
+
+# GP Operators
+
+$$
+ f\sim \mathcal{GP}(m, k). 
+$$
+
+The
+
+## `Eval` Functional {.scrollable}
+
+```{python}
+#| fig-align: center
+#| fig-width: 9       # inches for the matplotlib canvas
+#| fig-height: 4.5
+#| fig-dpi: 150
+#| out-width: 80%     # CSS scale on the slide
+
+# --- GP prior ---
+domain   = Euclidean((1,))
+codomain = Codomain((1,))
+mean     = ZeroMeanFun(domain, codomain)
+rbf_params = RBFParams(lengthscale=jnp.array(0.), amplitude=jnp.array(1.0))
+kernel   = RBFKernel(rbf_params)
+backend = ExactBackend(solverfns=solver_fns) 
+
+gp = GP(domain, codomain, mean, kernel, backend)
+
+# --- Data ---
+key = jax.random.PRNGKey(0)
+Xtr = jnp.linspace(-3.0, 3.0, 10).reshape(-1, 1)
+y_clean = jnp.sin(Xtr).squeeze()
+noise = 0.1
+y = y_clean + noise * jax.random.normal(key, shape=y_clean.shape)
+
+# --- Probes ---
+Ftr = Probe(ops=(), fnl=Eval(Xtr))
+Xt = jnp.linspace(-5.0, 5.0, 300).reshape(-1, 1)
+Fte = Probe(ops=(), fnl=Eval(Xt))
+
+# --- Model / condition ---
+lik = GaussianLikelihood()
+model = GPModel(gp=gp, likelihood=lik)
+post = model.condition(Ftr, y)
+
+# --- Prior mean/var (for reference) ---
+prior_mean = gp.mean_spec().eval(Xt)[:, 0]
+prior_var  = jnp.diag(pack_ev2mat(gp.kernel_spec().k0(Xt, Xt), (1,), (1,)))
+
+# --- Posterior mean/var ---
+m_post = post.mean(Fte)
+v_post = post.variance(Fte)
+
+# --- Plot ---
+xplot = Xt.squeeze()
+
+plt.figure(figsize=(10,5))
+
+# Prior
+plt.subplot(1,2,1)
+plt.title("Prior GP (RBF)")
+plt.fill_between(xplot,
+                 prior_mean - 2*jnp.sqrt(prior_var),
+                 prior_mean + 2*jnp.sqrt(prior_var),
+                 alpha=0.3, label="$\\pm 2 \\sigma$")
+plt.plot(xplot, prior_mean, "k--", label="mean")
+plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="train")
+plt.legend()
+
+# Posterior
+plt.subplot(1,2,2)
+plt.title("Posterior GP")
+plt.fill_between(xplot,
+                 m_post.reshape(-1,) - 2*jnp.sqrt(v_post),
+                 m_post.reshape(-1,) + 2*jnp.sqrt(v_post),
+                 alpha=0.3, label="$\\pm2\\sigma$")
+plt.plot(xplot, m_post, label="mean")
+plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="train")
+plt.legend()
+
+# plt.tight_layout()
+plt.show()
+
+```
+
+
+## `Partial` Operator {.scrollable}
+
+
+### $f \mid \partial_x f \sim \mathcal{GP}$
+
+```{python}
+#| fig-align: center
+#| fig-width: 9       # inches for the matplotlib canvas
+#| fig-height: 4.5
+#| fig-dpi: 150
+#| out-width: 80%     # CSS scale on the slide
+
+# --- GP prior ---
+domain   = Euclidean((1,))
+codomain = Codomain((1,))
+mean     = ZeroMeanFun(domain, codomain)
+imq_params = IMQParams(lengthscale=jnp.array(0.5), amplitude=jnp.array(1.24751754), beta=jnp.array(1.0))
+imq_kernel   = IMQKernel(imq_params)
+backend = ExactBackend(solverfns=solver_fns)
+
+gp = GP(domain, codomain, mean, imq_kernel, backend)
+
+# --- Data ---
+key = jax.random.PRNGKey(0)
+Xtr = jnp.linspace(-3.0, 3.0, 5).reshape(-1, 1)
+y_clean = jnp.sin(Xtr).squeeze()
+noise = 0.04
+y = y_clean + noise * jax.random.normal(key, shape=y_clean.shape)
+
+# --- Probes ---
+Ftr = Probe(ops=(Partial(0),), fnl=Eval(Xtr))
+Xt = jnp.linspace(-5.0, 5.0, 300).reshape(-1, 1)
+Fte = Probe(ops=(), fnl=Eval(Xt))
+
+# --- Model / condition ---
+lik = GaussianLikelihood(noise=DiagonalNoise(jnp.array([0.01])))
+model = GPModel(gp=gp, likelihood=lik)
+post = model.condition(Ftr, y)
+
+# --- Prior mean/var (for reference) ---
+prior_mean = gp.mean_spec().eval(Xt)[:, 0]
+prior_var  = jnp.diag(pack_ev2mat(gp.kernel_spec().k0(Xt, Xt), (1,), (1,)))
+
+# --- Posterior mean/var ---
+m_post = post.mean(Fte)
+v_post = post.variance(Fte)
+
+# --- Plot ---
+xplot = Xt.squeeze()
+
+plt.figure(figsize=(10,5))
+
+# Prior
+plt.subplot(1,2,1)
+plt.title("Prior GP (IMQ)")
+plt.fill_between(xplot,
+                 prior_mean - 2*jnp.sqrt(prior_var),
+                 prior_mean + 2*jnp.sqrt(prior_var),
+                 alpha=0.3, label="$\\pm2\\sigma$")
+plt.plot(xplot, prior_mean, "k--", label="mean")
+plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="train")
+plt.legend()
+
+# Posterior
+plt.subplot(1,2,2)
+plt.title("Posterior GP")
+plt.fill_between(xplot,
+                 m_post.reshape(-1,) - 2*jnp.sqrt(v_post),
+                 m_post.reshape(-1,) + 2*jnp.sqrt(v_post),
+                 alpha=0.3, label="$\\pm2\\sigma$")
+plt.plot(xplot, m_post, label="mean")
+plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="train")
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+```
+
+
+
+## `Gradient` Operator {.scrollable}
+
+
+
+### $\nabla f \mid \mathcal{D}$
+
+
+```{python}
+#| fig-align: center
+#| fig-width: 9       # inches for the matplotlib canvas
+#| fig-height: 4.5
+#| fig-dpi: 120
+#| out-width: 80%     # CSS scale on the slide
+
+
+# ----------------------------
+# GP prior (2D, with ARD)
+# ----------------------------
+domain   = Euclidean((2,))
+codomain = Codomain((1,))
+mean     = ZeroMeanFun(domain, codomain)
+
+solver_fns = SolverFns(chol_solve_hook(), chol_sqrt_hook(), chol_logdet_hook())
+
+backend = ExactBackend(solverfns=solver_fns)
+
+# ARD lengthscales (ℓ_x, ℓ_y); amplitude = σ²
+imq_params = IMQParams(
+    lengthscale=jnp.array([1.0, 0.7]),  # ARD
+    amplitude=jnp.array(1.0),
+    beta=jnp.array(1.0),
+)
+kernel  = IMQKernel(imq_params)
+
+gp      = GP(domain, codomain, mean, kernel, backend)
+
+# ----------------------------
+# Synthetic 2D data
+# ----------------------------
+key = jax.random.PRNGKey(0)
+n_tr = 60
+Xtr = jax.random.uniform(key, (n_tr, 2), minval=-3.0, maxval=3.0)
+
+def f_true(xy: jnp.ndarray) -> jnp.ndarray:
+    # smooth, non-separable target
+    x, y = xy[..., 0], xy[..., 1]
+    return jnp.sin(x) * jnp.cos(0.8 * y) + 0.2 * x
+
+y_clean = jax.vmap(f_true)(Xtr)
+noise   = 0.1
+y       = y_clean + noise * jax.random.normal(key, shape=y_clean.shape)
+
+# ----------------------------
+# Probes
+# ----------------------------
+Ftr   = Probe(ops=(), fnl=Eval(Xtr))                 # function values at Xtr
+lik   = GaussianLikelihood(noise=DiagonalNoise(jnp.array([0.01])))
+model = GPModel(gp=gp, likelihood=lik)
+post  = model.condition(Ftr, y)
+
+# Test grid for visualisation
+nx = ny = 60
+x1 = jnp.linspace(-3.5, 3.5, nx)
+x2 = jnp.linspace(-3.5, 3.5, ny)
+Xg1, Xg2 = jnp.meshgrid(x1, x2, indexing="xy")
+Xgrid = jnp.stack([Xg1.ravel(), Xg2.ravel()], axis=1)     # (nx*ny, 2)
+
+F_eval  = Probe(ops=(), fnl=Eval(Xgrid))                  # function probe
+F_grad  = Probe(ops=(Grad(), ), fnl=Eval(Xgrid))  # gradient probe (∂/∂x, ∂/∂y)
+
+# Posterior mean and gradient mean
+m_post_grid = post.mean(F_eval).reshape(nx*ny)            # (N,)
+g_post_grid = post.mean(F_grad).reshape(nx*ny, 2)         # (N, 2)
+
+
+# ----------------------------
+# Plotting (two separate figures)
+# ----------------------------
+fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+# 1) Posterior mean as filled contours
+ax = axes[0]
+M = m_post_grid.reshape(ny, nx)
+cf = ax.contourf(Xg1, Xg2, M, levels=25)
+ax.scatter(np.array(Xtr[:, 0]), np.array(Xtr[:, 1]), s=15, c="k", alpha=0.6)
+ax.set_title("Posterior Mean")
+ax.set_xlabel("x")
+ax.set_ylabel("y")
+ax.set_aspect("equal", adjustable="box")
+
+# 2) Gradient quiver (posterior mean gradient)
+ax = axes[1]
+G = g_post_grid.reshape(ny, nx, 2)
+step = max(1, nx // 20)  # thin arrows for clarity
+ax.quiver(
+    Xg1[::step, ::step], Xg2[::step, ::step],
+    G[::step, ::step, 0], G[::step, ::step, 1],
+    angles="xy", scale_units="xy", scale=1.0, color='white'
+)
+ax.scatter(Xtr[:, 0], Xtr[:, 1], s=10)
+ax.set_title("Posterior Mean Gradient")
+ax.set_xlabel("$x$")
+ax.set_ylabel("$y$")
+# ax.set_aspect("equal", adjustable="box")
+
+plt.tight_layout()
+plt.show()
+```
+
+### $f \mid \nabla f$
+
+```{python}
+#| fig-align: center
+#| fig-width: 9       # inches for the matplotlib canvas
+#| fig-height: 4.5
+#| fig-dpi: 150
+#| out-width: 80%     # CSS scale on the slide
+
+
+# ----------------------------
+# GP prior (2D, with ARD)
+# ----------------------------
+domain   = Euclidean((2,))
+codomain = Codomain((1,))
+mean     = ZeroMeanFun(domain, codomain)
+
+solver_fns = SolverFns(svd_solve_hook(), svd_sqrt_hook(), svd_logdet_hook())
+backend = ExactBackend(solverfns=solver_fns)
+
+# ARD lengthscales (ℓ_x, ℓ_y); amplitude = σ²
+imq_params = IMQParams(
+    lengthscale=jnp.array([2., 1.9]),  # ARD
+    amplitude=jnp.array(1.0),
+    beta=jnp.array(0.01),
+)
+kernel  = IMQKernel(imq_params)
+gp      = GP(domain, codomain, mean, kernel, backend)
+
+# ----------------------------
+# Synthetic 2D data
+# ----------------------------
+key = jax.random.PRNGKey(0)
+n_tr = 50
+Xtr = jax.random.uniform(key, (n_tr, 2), minval=-3.0, maxval=3.0)
+
+def f_true(xy: jnp.ndarray) -> jnp.ndarray:
+    x, y = xy[..., 0], xy[..., 1]
+    return 0.2 * jnp.sin(x) * jnp.cos(0.8 * y) + 0.3 * x  # scalar
+
+# --- gradient observations (condition on these!) ---
+# g_true: (n_tr, 2) with columns [∂f/∂x, ∂f/∂y]
+g_true = jax.vmap(jax.grad(f_true))(Xtr)
+
+grad_noise = 0.1
+key_g = jax.random.split(key, 2)[1]
+g_obs = g_true + grad_noise * jax.random.normal(key_g, g_true.shape)  # (n_tr, 2)
+
+# ----------------------------
+# Probes (train on gradients)
+# ----------------------------
+# Gradient operator produces a 2-output (multioutput) GP at each location.
+Ftr   = Probe(ops=(Grad(),), fnl=Eval(Xtr))        # gradient at Xtr, shape ~ (n_tr, 2)
+# Per-output diagonal noise (broadcast across n_tr)
+lik   = GaussianLikelihood(noise=DiagonalNoise(jnp.array([0.01, 0.01])))
+model = GPModel(gp=gp, likelihood=lik)
+
+# Condition on gradient observations
+post  = model.condition(Ftr, g_obs)
+
+# grid for visualisation
+nx = ny = 60
+x1 = jnp.linspace(-3.5, 3.5, nx)
+x2 = jnp.linspace(-3.5, 3.5, ny)
+Xg1, Xg2 = jnp.meshgrid(x1, x2, indexing="xy")
+Xgrid = jnp.stack([Xg1.ravel(), Xg2.ravel()], axis=1)     # (nx*ny, 2)
+
+F_eval = Probe(ops=(),        fnl=Eval(Xgrid))            # function values
+F_grad = Probe(ops=(Grad(),), fnl=Eval(Xgrid))            # gradient values
+
+# Posterior means
+m_post_grid = post.mean(F_eval).reshape(nx*ny)            # (N,)
+g_post_grid = post.mean(F_grad).reshape(nx*ny, 2)         # (N,2)
+
+# Plotting
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=False)
+
+# 1) Posterior mean as filled contours
+ax = axes[0]
+M = np.array(m_post_grid).reshape(ny, nx)
+cf = ax.contourf(np.array(Xg1), np.array(Xg2), M, levels=25)
+ax.scatter(np.array(Xtr[:, 0]), np.array(Xtr[:, 1]), s=20, c="k", alpha=1.)
+
+# overlay observed gradient arrows at training points
+X = np.array(Xtr[:, 0])
+Y = np.array(Xtr[:, 1])
+U = np.array(g_obs[:, 0])   # ∂f/∂x
+V = np.array(g_obs[:, 1])   # ∂f/∂y
+
+ax.quiver(
+    X, Y, U, V,
+    angles="xy", scale_units="xy", scale=0.7,
+    color="k",  zorder=3
+)
+
+ax.set_title("Posterior Mean (conditioned on $\\nabla f$)")
+ax.set_xlabel("x"); ax.set_ylabel("y"); ax.set_aspect("equal", adjustable="box")
+fig.colorbar(cf, ax=ax, fraction=0.046, pad=0.04)
+
+# 2) Gradient quiver (posterior mean gradient)
+ax = axes[1]
+G = np.array(g_post_grid).reshape(ny, nx, 2)
+step = max(1, nx // 20)  # thin arrows for clarity
+ax.quiver(
+    np.array(Xg1[::step, ::step]), np.array(Xg2[::step, ::step]),
+    G[::step, ::step, 0], G[::step, ::step, 1],
+    angles="xy", scale_units="xy", scale=1.1, color='white'
+)
+ax.scatter(np.array(Xtr[:, 0]), np.array(Xtr[:, 1]), s=20, alpha=1.)
+ax.set_title("Posterior Mean Gradient (conditioned on $\\nabla f$)")
+ax.set_xlabel("$x$"); ax.set_ylabel("$y$"); ax.set_aspect("equal", adjustable="box")
+
+plt.show()
+
+```
+
+
+## Multioutput GPs {.scrollable}
+
+`GaussED` natively supports *tensor valued* kernels. However, choosing/defining such a kernel is difficult.
+
+### Coregional (ICM) Kernels
+
+$$ (f_1,\ldots, f_D)^\top \sim \mathcal{GP}(m, K), $$
+
+where $K$ is a matrix-valued kernel:
+$$ 
+K:\mathcal{X}\times\mathcal{X} \rightarrow \mathbb{R}^{D\times D}. 
+$$
+
+Takes form:
+
+$$
+ K(x,y) = \Sigma \, k(x,y). 
+$$
+
+
+#### Option 1: Hard Code
+
+```{python}
+domain   = Euclidean((1,))
+codomain = Codomain((2,))
+mean     = ZeroMeanFun(domain, codomain)
+
+# Kernel specification
+imq_params = IMQParams(lengthscale=jnp.array(0.5), amplitude=jnp.array(1.24751754), beta=jnp.array(1.0))
+imq_kernel = IMQKernel(imq_params)
+
+coreg_par = CoregionParams(imq_params, L_params = jnp.array([[1.0, 0.8], [0.8, 1.0]]))
+coreg_kernel = CoregionalKernel(imq_kernel, coreg_par)
+
+backend = ExactBackend(solverfns=solver_fns)
+
+# GP specification
+gp = GP(domain, codomain, mean, coreg_kernel, backend)
+gpmodel = GPModel(gp=gp, likelihood=lik)
+
+ks = gp.kernel_spec()
+
+x, y = jnp.array([[1.0], [2.0]])
+print("ICM(0., 1.) = ", coreg_kernel(x, y, domain))
+
+```
+
+
+This is an ICM kernel with 
+
+$$
+ \Sigma = L^\top L
+  $$ 
+
+where 
+
+```{python}
+mat = coreg_kernel._make_L()
+print("L = ", mat)
+```
+
+
+#### Option 2: via `Affine` Operator
+
+Alternatively can view an ICM kernel as an independent multioutput GP $f = (f_1,\ldots, f_D)^\top$ with kernel
+
+$$ 
+K(x, y) = \begin{pmatrix} k_1(x,y) & 0 & \ldots & 0 \\ 0 & k_2(x,y) & \ldots & 0 \\ \vdots  & \vdots & \ddots & \vdots \\ 0 & 0 & \ldots & k_D(x,y) \end{pmatrix} 
+$$
+
+Then transformed via a matrix multiply:
+
+$$
+f_{\text{ICM}} = L f
+$$
+
+```{python}
+domain   = Euclidean((1,))
+codomain = Codomain((2,))
+mean     = ZeroMeanFun(domain, codomain)
+
+stacked_kern = StackedKernel((imq_kernel, imq_kernel))
+
+backend = ExactBackend(solverfns=solver_fns)
+
+gp = GP(domain, codomain, mean, stacked_kern, backend)
+gpmodel = GPModel(gp=gp, likelihood=lik)
+
+ks = gp.kernel_spec()
+
+aff_op = Affine(mat)                  # Affine operator f \mapsto A f + c
+eval_op = Eval(x)                     # Evaluation operator
+probe = Probe((aff_op,), eval_op)     # Probe composes them
+
+eval_op_other = Eval(y)
+probe_other = Probe((aff_op, ), eval_op_other)
+
+probe.kernel(probe_other, ks, None)
+```
+
+## Probabilistic Linear Solvers {.scrollable}
+
+### Output
+
+```{python}
+# Problem
+N = 40
+key = jax.random.PRNGKey(0)
+key1, key2 = jax.random.split(key, 2)
+A = jax.random.normal(key1, (N,N))
+v_true = jax.random.normal(key2, (N,))
+b = A @ v_true
+```
+
+
+```{python}
+
+index_domain = IndexDomain(N,  jnp.float64)
+
+# Pick k directions: k standard basis columns
+k = 20
+idxs = jnp.linspace(0, N-1, k).round().astype(jnp.int32)
+S = jnp.eye(N)[:, idxs]                               # (N,k)
+
+# Build W and y
+W = (S.T @ A)                                         # (k,N)  == S^T A
+y = (S.T @ b).reshape(k, 1)                           # (k,1)
+
+# GP prior on IndexDomain with delta kernel (Σ0 = α I)
+index_domain = IndexDomain(N, jnp.float64)
+codomain = Codomain((1,))
+mean = ZeroMeanFun(index_domain, codomain)
+delta_kernel = DeltaKernel(DeltaParams(amplitude=jnp.array(1.)))
+backend = ExactBackend(solverfns=solver_fns)
+
+gp = GP(index_domain, codomain, mean, delta_kernel, backend)
+gpmodel = GPModel(gp=gp, likelihood=GaussianLikelihood())
+
+# Observations via WeightedEval over all indices X_all
+X_all = jnp.arange(N, dtype=jnp.int32).reshape(N, 1)
+obs_fnl = WeightedEval(W=W, X=X_all)
+probe_obs = Probe(ops=(), fnl=obs_fnl)
+post = gpmodel.condition(probe_obs, y)                # posterior GP over v
+
+# Evaluate posterior on all indices for plotting
+probe_te = Probe(ops=(), fnl=Eval(X_all))
+mu1 = post.mean(probe_te)                      # mu: (N,1), cov: (N,1,N,1) (or your backend shape)
+C = post.covariance(probe_te)
+
+```
+
+```{python}
+#| fig-align: center
+#| fig-width: 9       # inches for the matplotlib canvas
+#| fig-height: 4.5
+#| fig-dpi: 150
+#| out-width: 80%     # CSS scale on the slide
+#| echo: False
+
+# X (indices), mean, covariance -> 1D arrays / NxN
+x = jnp.asarray(X_all).squeeze()
+if x.ndim != 1:
+    x = jnp.arange(jnp.asarray(mu).shape[0])
+var  = jnp.diag(C)
+std  = jnp.sqrt(jnp.clip(var, 0.0, jnp.inf))
+vt   = v_true
+
+fig, axes = plt.subplots(1, 3, figsize=(10, 3), constrained_layout=True)
+
+# 1) Mean ±1σ (and truth if provided)
+ax = axes[0]
+ax.plot(np.array(x), np.array(mu1), label="posterior mean")
+ax.fill_between(np.array(x), np.array(mu1 - std), np.array(mu1 + std), alpha=0.3)
+if vt is not None:
+    ax.plot(np.array(x), np.array(vt), label="true solution")
+ax.set_xlabel("index")
+ax.set_ylabel("value")
+ax.set_title("Posterior mean $\\pm \\sigma$")
+ax.legend()
+
+# 2) Variance (diagonal of covariance)
+ax = axes[1]
+ax.plot(np.array(x), np.array(var))
+ax.set_xlabel("index")
+ax.set_ylabel("variance")
+ax.set_title("Posterior variance (diag of cov)")
+
+# 3) Covariance heatmap
+ax = axes[2]
+C_np = np.array(C)
+im = ax.imshow(C_np)
+n = C_np.shape[0]
+
+if n < 20:
+    ax.set_xticks(np.arange(n))
+    ax.set_yticks(np.arange(n))
+    ax.set_xticklabels(np.arange(n))
+    ax.set_yticklabels(np.arange(n))
+    ax.set_xlim(-0.5, n - 0.5)
+    ax.set_ylim(n - 0.5, -0.5)  # keep (0,0) at top-left as in imshow default
+
+ax.grid(False)
+ax.set_aspect('equal')  # optional: square pixels
+ax.set_title("Posterior covariance")
+ax.set_xlabel("$j$")
+ax.set_ylabel("$i$")
+fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+plt.show()
+```
+
+# Experimental Design
+

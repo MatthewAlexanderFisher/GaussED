@@ -1,0 +1,101 @@
+.mjx-container, .mjx-container * { font-family: unset !important; }
+
+
+/* Make the slide itself the scroll container and keep the bar on the RIGHT */
+.reveal .slides section.scrollable,
+.reveal .slides section.present.scrollable {
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  height: 100%;
+  scrollbar-gutter: stable; /* avoid layout shift when scrollbar appears */
+}
+
+/* Center typical Quarto figure outputs (Moon sets slides left-aligned) */
+.reveal .slides .cell-output-display figure,
+.reveal .slides .quarto-figure,
+.reveal .slides figure {
+  text-align: center !important;
+}
+.reveal .slides .cell-output-display figure > p {
+  text-align: center !important;
+  margin: 0;
+}
+.reveal .slides .cell-output-display img,
+.reveal .slides .quarto-figure img,
+.reveal .slides figure img {
+  display: block !important;
+  margin: 0 auto !important;
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---------- Scrollbar theming ---------- */
+/* Firefox */
+/* .reveal .slides section.scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: var(--r-link-color) #212946;
+}
+
+/* WebKit (Chrome/Edge/Safari) */
+.reveal .slides section.scrollable::-webkit-scrollbar {
+  width: 10px;
+}
+.reveal .slides section.scrollable::-webkit-scrollbar-track {
+  background: #212946;
+  border-radius: 8px;
+}
+.reveal .slides section.scrollable::-webkit-scrollbar-thumb {
+  background: #212946;      /* uses Reveal theme accent */
+  border-radius: 8px;
+}
+.reveal .slides section.scrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--r-link-color-hover);
+} */
+
+/* Make scrollbars subtle and only “pop” on hover */
+.reveal .slides section.scrollable {
+  /* keeps layout from jumping when bar appears */
+  scrollbar-gutter: stable;
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.reveal .slides section.scrollable:hover {
+  scrollbar-color: var(--r-link-color) transparent;
+}
+/* WebKit (Chrome/Edge/Safari) */
+.reveal .slides section.scrollable::-webkit-scrollbar {
+  width: 8px;
+}
+.reveal .slides section.scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+.reveal .slides section.scrollable::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 8px;
+}
+.reveal .slides section.scrollable:hover::-webkit-scrollbar-thumb {
+  background: var(--r-link-color);              /* uses Moon’s accent */
+}
+
+
+
+/* Extra space after any code/output block */
+.reveal .slides .cell > .cell-output:last-child,
+.reveal .slides .cell > .cell-output-display:last-child,
+.reveal .slides .cell > .cell-output-stdout:last-child {
+  margin-bottom: 1.25rem;  /* tweak to taste */
+}
+
+/* If a heading immediately follows an output, push it down a bit more */
+.reveal .slides .cell-output + h1,
+.reveal .slides .cell-output + h2,
+.reveal .slides .cell-output + h3,
+.reveal .slides .cell-output + h4,
+.reveal .slides .cell-output + h5,
+.reveal .slides .cell-output + h6 {
+  margin-top: 0.75rem;     /* tweak to taste */
+}
+
+/* (Some outputs wrap images in <figure><p><img>...) */
+.reveal .slides .cell-output figure { margin-bottom: 1.25rem; }
