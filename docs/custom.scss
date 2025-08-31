@@ -1,18 +1,18 @@
 /*-- scss:defaults --*/
 /* Reveal/Quarto variables you can override */
-$backgroundColor: #212946 !default;
+$backgroundColor: #ffffff !default;
 
-$headingFont: "Iosevka", Times, serif !default;
-$mainFont:    "Iosevka", Times, serif !default;
-$mainFontSize: 28px !default;
+// $headingFont: "Lato", Arial, sans-serif;
+// $mainFont:    "Lato", Arial, sans-serif;
+$mainFontSize: 24px !default;
 
 /* Slightly blend text toward the background hue.
    Increase the first percentage (e.g. 15%) for a stronger tint. */
-$mainColor:    mix($backgroundColor, #eeeeee, 8%) !default;  // body text
-$headingColor: mix($backgroundColor, #ffffff,   4%) !default; // headings
+$mainColor:    mix($backgroundColor, #191f35, 8%) !default;  // body text
+$headingColor: mix($backgroundColor, #191f35,   4%) !default; // headings
 
 /* Optional: make code/comments a touch dimmer */
-$code-color:   mix($backgroundColor, #08F7FE, 5%) !default;
+$code-color:   mix($backgroundColor, #0820fe, 1%) !default;
 
 /*-- scss:rules --*/
 /* Keep headings non-bold if you prefer that look */

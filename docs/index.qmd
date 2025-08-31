@@ -1,6 +1,6 @@
 ---
-title: "GaussED"
-author: "Matthew Fisher"
+title: "GaussED: A Python Package for Sequential Experimental Design"
+author: "Matthew Fisher, Onur Teymur, Chris Oates"
 project:
   type: website
 #   output-dir: /docs
@@ -9,7 +9,10 @@ editor:
   render-on-save: true
 format:
   revealjs:
-    theme: [moon, custom.scss]
+    template-partials:
+      - title-slide.html
+
+    theme: custom.scss
     css: custom.css
     fig-align: center
     margin: 0.06        # default ~0.04; smaller = slide closer to edges
@@ -33,15 +36,12 @@ format:
 
 execute:
   echo: true              # show code by default (set false to hide globally)
-  # fig-width: 9
-  # fig-height: 3
-  # fig-dpi: 100
-  # fig-align: center
 
 jupyter: python3
 ---
 
-# Introduction
+
+# What is this about?
 
 
 ```{python}
@@ -55,10 +55,12 @@ config.update("jax_enable_x64", True)  # do this at the very top
 
 import matplotlib.pyplot as plt
 
-import mplcyberpunk
-plt.style.use("cyberpunk")
+from tueplots import bundles, figsizes
 
-plt.rcParams["figure.figsize"] = (5, 3)
+plt.rcParams.update(bundles.probnum2025())
+plt.rcParams.update(figsizes.probnum2025_half())
+
+# plt.rcParams["figure.figsize"] = (5, 3)
 plt.rcParams["text.usetex"] = True
 plt.rcParams["font.family"] = "serif"
 plt.rcParams["font.serif"] = ["Computer Modern Roman"]  # matches LaTeX default
@@ -104,38 +106,82 @@ from gaussed.likelihoods.gaussian_noise import DiagonalNoise
 solver_fns = SolverFns(svd_solve_hook(), svd_sqrt_hook(), svd_logdet_hook())
 ```
 
-## What is `GaussED`?
+
+
+<!-- ## What is this about? {.incremental} -->
+
+::: {.unmarked}
+::: {.incremental}
+- **Desiderium:** Uncertainty in numerics should come with low additional overhead.
+- **But:** Closed-form expressions for conditioning are limited.
+- **And so**: Most PN is rooted in linear Gaussian (process) conditioning.
+- **Idea:** An engine for automatic linear Gaussian conditioning, coupled to a high-level programming language for PN.
+:::
+:::
+
+::: {.unmarked}
+::: {.incremental}
+::: {.aside-right}
+- we present a proof of concept
+:::
+:::
+:::
+
+::: {.unmarked}
+::: {.incremental}
+- **Opportunity 1:** Could rapidly attempt de novo tasks with PN (and beyond).
+
+::: {.aside-right}
+- we demonstrate an application to x-ray tomography
+:::
+
+- **Opportunity 2:** Could automate sequential experimental design (SED)
+
+::: {.aside-right}
+- we propose a general-purpose acquisition function
+:::
+   
+- **The result:** A Python package called `GaussED`.
+:::
+:::
+
+
+
+# `GaussED` Design
+
+## `GaussED` Design Goals
+
 
 
 ## Package Structure {.scrollable}
 
-```{mermaid, fig-align="center", out-width="80%", echo="False"}
-graph LR
+```{mermaid, fig-align="center", out-width=60%}
+%%{init: {
+  "flowchart": { "useMaxWidth": true, "nodeSpacing": 20, "rankSpacing": 160 },
+  "themeVariables": { "fontSize": "24px", "fontFamily": "Iosevka, Times, serif" }
+}}%%
+graph TB
+
   %% --- GP construction ---
-  subgraph "GP Definition"
+  subgraph GP_Definition["GP Definition"]
     Domain[Domain] --> GP
     Codomain[Codomain] --> GP
     Mean[MeanFun] --> GP
     Kernel[Kernel] --> GP
-    ExactBackend --> GP
   end
 
   %% --- Operators / Probes ---
-  subgraph "Linear Operators & Probes"
-    Eval[Eval] --> Probe
-    Partial[Partial] --> Probe
-    Grad[Grad] --> Probe
-    Linearise[Linearise] --> Probe
-    Affine[Affine] --> Probe
-    WeightedEval[WeightedEval] --> Probe
+  subgraph GP_Operators["GP Operators"]
+    Eval[Eval] --> Functional
+    Functional[Functional] --> Probe
+    Operator[Operator] --> Probe
+    Partial[Partial] --> Operator
+    Grad[Grad] --> Operator
+    Linearise[Linearise] --> Operator
+    Affine[Affine] --> Operator
+    WeightedEval[WeightedEval] --> Functional
+    Integral[Integral] --> Functional
     Probe --> ProbeStack
-  end
-
-  %% --- Backend internals ---
-  subgraph Backend
-    SolverFns --> ExactBackend
-    ExactBackend --> Reps["KernelRep / InducingRep / BasisRep"]
-    Reps --> LinearSolver
   end
 
   %% --- Model & posterior ---
@@ -146,9 +192,36 @@ graph LR
     GPModel -->|condition| PosteriorGP
   end
 
+
+  %% --- Backend internals ---
+  subgraph BackendGrp["Backend"]
+    BackendNode[Backend] --> GPModel
+    LinearSolver[Linear Solver] --> BackendNode
+    BackendNode --> Reps["Exact / Inducing / Basis"]
+    SpectralBasis[Spectral Basis] --> Reps
+    Reps --> LinearSolver
+  end
+
   ProbeStack -->|queries| PosteriorGP
   LinearSolver --> PosteriorGP
 ```
+
+
+## Kernel Representations
+
+There are multiple ways to represent a kernel:
+
+1. **Exactly:**
+2. **Inducing Points:**
+3. **Basis/Operator Centric:**
+
+
+## Spectral GP Approach
+
+## Linear Solvers
+
+`GaussED` supports 
+
 
 # GP Operators (`gaussed/gp/gp_ops`)
 
@@ -167,7 +240,7 @@ $$
 This is achieved via linear operators
 
 
-## `GaussED` Syntax
+## `GaussED` Operator Syntax
 
 The `gp_ops` module implements:
 
@@ -255,8 +328,8 @@ plt.fill_between(xplot,
                  prior_mean - 2*jnp.sqrt(prior_var),
                  prior_mean + 2*jnp.sqrt(prior_var),
                  alpha=0.3, label="$\\pm 2 \\sigma$")
-plt.plot(xplot, prior_mean, "k--", label="mean")
-plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="train")
+plt.plot(xplot, prior_mean, "k--", label="Mean")
+plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="Data")
 plt.legend()
 
 # Posterior
@@ -266,12 +339,12 @@ plt.fill_between(xplot,
                  m_post.reshape(-1,) - 2*jnp.sqrt(v_post),
                  m_post.reshape(-1,) + 2*jnp.sqrt(v_post),
                  alpha=0.3, label="$\\pm2\\sigma$")
-plt.plot(xplot, m_post, label="mean")
-plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="train")
+plt.plot(xplot, m_post, label="Mean")
+plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="Data")
 plt.legend()
 
 # plt.tight_layout()
-mplcyberpunk.add_glow_effects()
+# mplcyberpunk.add_glow_effects()
 plt.show()
 
 ```
@@ -337,7 +410,7 @@ plt.fill_between(xplot,
                  prior_mean + 2*jnp.sqrt(prior_var),
                  alpha=0.3, label="$\\pm2\\sigma$")
 plt.plot(xplot, prior_mean, "k--", label="mean")
-plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="train")
+plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="Data")
 plt.legend()
 
 # Posterior
@@ -348,11 +421,11 @@ plt.fill_between(xplot,
                  m_post.reshape(-1,) + 2*jnp.sqrt(v_post),
                  alpha=0.3, label="$\\pm2\\sigma$")
 plt.plot(xplot, m_post, label="mean")
-plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="train")
+plt.scatter(Xtr.squeeze(), y, s=25, c="r", label="Data")
 plt.legend()
 
 plt.tight_layout()
-mplcyberpunk.add_glow_effects()
+# mplcyberpunk.add_glow_effects()
 
 plt.show()
 
@@ -368,12 +441,6 @@ plt.show()
 
 
 ```{python}
-#| fig-align: center
-#| fig-width: 9       # inches for the matplotlib canvas
-#| fig-height: 4.5
-#| fig-dpi: 120
-#| out-width: 80%     # CSS scale on the slide
-
 
 # ----------------------------
 # GP prior (2D, with ARD)
@@ -433,12 +500,21 @@ F_grad  = Probe(ops=(Grad(), ), fnl=Eval(Xgrid))  # gradient probe (∂/∂x, �
 # Posterior mean and gradient mean
 m_post_grid = post.mean(F_eval).reshape(nx*ny)            # (N,)
 g_post_grid = post.mean(F_grad).reshape(nx*ny, 2)         # (N, 2)
+```
 
+
+```{python}
+#| fig-align: center
+#| fig-width: 9       # inches for the matplotlib canvas
+#| fig-height: 4.5
+#| fig-dpi: 120
+#| out-width: 75%     # CSS scale on the slide
+#| echo: false
 
 # ----------------------------
 # Plotting (two separate figures)
 # ----------------------------
-fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+fig, axes = plt.subplots(1, 2, figsize=(9, 4.5))
 
 # 1) Posterior mean as filled contours
 ax = axes[0]
@@ -457,7 +533,7 @@ step = max(1, nx // 20)  # thin arrows for clarity
 ax.quiver(
     Xg1[::step, ::step], Xg2[::step, ::step],
     G[::step, ::step, 0], G[::step, ::step, 1],
-    angles="xy", scale_units="xy", scale=1.0, color='white'
+    angles="xy", scale_units="xy", scale=1.0
 )
 ax.scatter(Xtr[:, 0], Xtr[:, 1], s=10)
 ax.set_title("Posterior Mean Gradient")
@@ -466,7 +542,7 @@ ax.set_ylabel("$y$")
 # ax.set_aspect("equal", adjustable="box")
 
 plt.tight_layout()
-mplcyberpunk.add_glow_effects()
+# mplcyberpunk.add_glow_effects()
 
 plt.show()
 ```
@@ -577,12 +653,12 @@ step = max(1, nx // 20)  # thin arrows for clarity
 ax.quiver(
     np.array(Xg1[::step, ::step]), np.array(Xg2[::step, ::step]),
     G[::step, ::step, 0], G[::step, ::step, 1],
-    angles="xy", scale_units="xy", scale=1.1, color='white'
+    angles="xy", scale_units="xy", scale=1.1
 )
 ax.scatter(np.array(Xtr[:, 0]), np.array(Xtr[:, 1]), s=20, alpha=1.)
 ax.set_title("Posterior Mean Gradient (conditioned on $\\nabla f$)")
 ax.set_xlabel("$x$"); ax.set_ylabel("$y$"); ax.set_aspect("equal", adjustable="box")
-mplcyberpunk.add_glow_effects()
+# mplcyberpunk.add_glow_effects()
 
 plt.show()
 
@@ -591,9 +667,10 @@ plt.show()
 
 ## Multioutput GPs {.scrollable}
 
-`GaussED` natively supports *tensor valued* kernels. However, choosing/defining such a kernel is difficult.
+`GaussED` natively supports *tensor valued* kernels. A common choice is an **intrinsic coregionalisation model** (ICM) kernel.
 
 ### Coregional (ICM) Kernels
+Suppose
 
 $$ (f_1,\ldots, f_D)^\top \sim \mathcal{GP}(m, K), $$
 
@@ -617,7 +694,7 @@ codomain = Codomain((2,))
 mean     = ZeroMeanFun(domain, codomain)
 
 # Kernel specification
-imq_params = IMQParams(lengthscale=jnp.array(0.5), amplitude=jnp.array(1.24751754), beta=jnp.array(1.0))
+imq_params = IMQParams(lengthscale=jnp.array(0.5), amplitude=jnp.array(1.2), beta=jnp.array(0.5))
 imq_kernel = IMQKernel(imq_params)
 
 coreg_par = CoregionParams(imq_params, L_params = jnp.array([[1.0, 0.8], [0.8, 1.0]]))
@@ -631,38 +708,48 @@ gpmodel = GPModel(gp=gp, likelihood=lik)
 
 ks = gp.kernel_spec()
 
-x, y = jnp.array([[1.0], [2.0]])
-print("ICM(0., 1.) = ", coreg_kernel(x, y, domain))
+x, y = jnp.array([[1.0]]), jnp.array([[2.0]])
+Kxy = coreg_kernel(x, y, domain)
+
+print("=== Coregionalised IMQ Kernel Evaluation ===")
+print(f"Inputs: x = {x.ravel()[0]:.2f}, y = {y.ravel()[0]:.2f}")
+print("Kernel Matrix (ICM):")
+print(Kxy)
 
 ```
 
 
-This is an ICM kernel with 
-
-$$
- \Sigma = L^\top L
-  $$ 
-
-where 
+This is an ICM kernel with $\Sigma = L^\top L$, where 
 
 ```{python}
 mat = coreg_kernel._make_L()
-print("L = ", mat)
+
+print("=== Coregionalised Kernel Structure ===")
+print("L (coregionalisation matrix):")
+print(mat)
+print("\nΣ = Lᵀ L (implied covariance across outputs)")
 ```
 
+#### Option 2: ICM via `Affine` Operator
 
-#### Option 2: via `Affine` Operator
-
-Alternatively can view an ICM kernel as an independent multioutput GP $f = (f_1,\ldots, f_D)^\top$ with kernel
-
-$$ 
-K(x, y) = \begin{pmatrix} k_1(x,y) & 0 & \ldots & 0 \\ 0 & k_2(x,y) & \ldots & 0 \\ \vdots  & \vdots & \ddots & \vdots \\ 0 & 0 & \ldots & k_D(x,y) \end{pmatrix} 
-$$
-
-Then transformed via a matrix multiply:
+Alternatively, view an ICM as a **linear mixing** of independent outputs. Starting with an independent multi-output GP:
 
 $$
-f_{\text{ICM}} = L f
+f(x)=\begin{pmatrix}f_1(x)\\ \vdots \\ f_D(x)\end{pmatrix}, 
+\qquad 
+\operatorname{cov}\!\big[f(x),f(y)\big] \;=\; \mathrm{diag}\!\big(k_1(x,y),\ldots,k_D(x,y)\big),
+$$
+
+apply a linear map $L\in\mathbb{R}^{D\times D}$:
+$$
+f_{\text{ICM}}(x) \;=\; L\,f(x).
+$$
+
+Then
+
+$$
+\operatorname{cov}\!\big[f_{\text{ICM}}(x),f_{\text{ICM}}(y)\big]
+\;=\; L\;\mathrm{diag}\!\big(k_1(x,y),\ldots,k_D(x,y)\big)\;L^\top.
 $$
 
 ```{python}
@@ -670,26 +757,35 @@ domain   = Euclidean((1,))
 codomain = Codomain((2,))
 mean     = ZeroMeanFun(domain, codomain)
 
+# Independent outputs: block-diagonal kernel diag(k, k)
 stacked_kern = StackedKernel((imq_kernel, imq_kernel))
 
 backend = ExactBackend(solverfns=solver_fns)
-
 gp = GP(domain, codomain, mean, stacked_kern, backend)
 gpmodel = GPModel(gp=gp, likelihood=lik)
 
 ks = gp.kernel_spec()
 
-aff_op = Affine(mat)                  # Affine operator f \mapsto A f + c
-eval_op = Eval(x)                     # Evaluation operator
-probe = Probe((aff_op,), eval_op)     # Probe composes them
+# --- Probes: Affine ∘ Eval ---
+aff_op = Affine(mat)                  # f ↦ L f + c   (here c=0 internally)
+eval_x = Eval(x)
+eval_y = Eval(y)
 
-eval_op_other = Eval(y)
-probe_other = Probe((aff_op, ), eval_op_other)
+probe_x = Probe((aff_op,), eval_x)
+probe_y = Probe((aff_op,), eval_y)
 
-probe.kernel(probe_other, ks, None)
+# Kernel via operator calculus
+K_icm_affine = probe_x.kernel(probe_y, ks, None)  # shape (2, 2)
+
+print("=== ICM via Affine Operator ===")
+print(f"Inputs: x = {x.ravel()[0]:.2f}, y = {y.ravel()[0]:.2f}")
+print("\nICM kernel from operator construction:")
+print(K_icm_affine)
 ```
 
-### `Linearise` Operator
+They produce the same output!
+
+## `Linearise` Operator
 
 Suppose we have $f: \mathcal{X} \rightarrow \mathbb{R}^D$ and a function $g:\mathbb{R}^D\rightarrow \mathbb{R}^D$, then $g(f)$ is no longer Gaussian if $g$ isn't linear :( 
 
@@ -873,7 +969,6 @@ If $A$ is not, then CG may not offer the best approach.
 ### Via `IndexDomain`
 
 
-
 ```{python}
 
 index_domain = IndexDomain(N,  jnp.float64)
@@ -905,8 +1000,8 @@ post = gpmodel.condition(probe_obs, y)                # posterior GP over v
 
 # Evaluate posterior on all indices for plotting
 probe_te = Probe(ops=(), fnl=Eval(X_all))
-mu1 = post.mean(probe_te)                      # mu: (N,1), cov: (N,1,N,1) (or your backend shape)
-C = post.covariance(probe_te)
+post_mean = post.mean(probe_te)                   
+post_cov = post.covariance(probe_te)
 
 ```
 
@@ -922,7 +1017,7 @@ C = post.covariance(probe_te)
 x = jnp.asarray(X_all).squeeze()
 if x.ndim != 1:
     x = jnp.arange(jnp.asarray(mu).shape[0])
-var  = jnp.diag(C)
+var  = jnp.diag(post_cov)
 std  = jnp.sqrt(jnp.clip(var, 0.0, jnp.inf))
 vt   = v_true
 
@@ -930,8 +1025,8 @@ fig, axes = plt.subplots(1, 3, figsize=(10, 3), constrained_layout=True)
 
 # 1) Mean ±1σ (and truth if provided)
 ax = axes[0]
-ax.plot(np.array(x), np.array(mu1), label="posterior mean")
-ax.fill_between(np.array(x), np.array(mu1 - std), np.array(mu1 + std), alpha=0.3)
+ax.plot(np.array(x), np.array(post_mean), label="posterior mean")
+ax.fill_between(np.array(x), np.array(post_mean - std), np.array(post_mean + std), alpha=0.3)
 if vt is not None:
     ax.plot(np.array(x), np.array(vt), label="true solution")
 ax.set_xlabel("index")
@@ -948,7 +1043,7 @@ ax.set_title("Posterior variance (diag of cov)")
 
 # 3) Covariance heatmap
 ax = axes[2]
-C_np = np.array(C)
+C_np = np.array(post_cov)
 im = ax.imshow(C_np)
 n = C_np.shape[0]
 
@@ -975,16 +1070,28 @@ plt.show()
 
 
 
-# Sequential Experimental Design (`gaussed/ed`)
+# Sequential Experimental Design (`gaussed/sed`)
 
-## Acquisition Functions
+## Aims and Setup
 
-In general, given information $\delta_n(\mathrm{f})$ at step $n$, we seek a subsequent experiment $\delta^*$ such that
+**Aim:** Avoid tedious searching for good acquisition function for each new task.
+
+**Set-up:**
+
+- (truth) $\mathrm{f}: \mathcal{X} \rightarrow \mathbb{R}^D$.
+- (prior) $\mathbb{P}$, e.g. a Gaussian process, supported on $\mathcal{F}$.
+- (design set) $\mathcal{D} \subset \{\text{continuous linear functionals on } \mathcal{F}\}$.
+- (data) $\boldsymbol{\delta}_{n-1}(\mathrm{f}) = [\delta_1(\mathrm{f}), \ldots, \delta_{n-1}(\mathrm{f})] \in \mathbb{R}^{D\times (n-1)}$
+
+
+**Sequential Experimental Design:** At iteration $n$, select an experiment $\delta_n$ from the design set in order that an *acquisition function* is maximised
 $$
-\delta^* \in \arg\max_{\delta \in \mathcal{D}} A_\delta(f; \delta_n(\mathrm{f})).
+\delta_n \in \arg\max_{\delta \in \mathcal{D}} A(\delta; \mathbb{P}, \boldsymbol{\delta}_{n-1}(\mathrm{f})).
 $$
 
-The function $A$ is called an **acquisition function**. 
+e.g. expected improvement for Bayesian optimisation.
+
+but what if we don’t know a good acquisition function A?
 
 ## Quantities of Interest
 Hard to come up with acquisition functions for general problems. However, it is very natural to have a **quantity of interest** (QoI) 
@@ -1008,4 +1115,61 @@ $$
    $$
 
 
-## Bayesian Experimental Design
+## A General-Purpose Acquisition Function
+::: {.unmarked}
+::: {.incremental}
+- **Idea:** Use classical but overlooked ideas from Bayesian decision theory!
+- **Step 1:** An acquisition function from a utility function. The \emph{expected utility} acquisition function is
+$$
+A(\delta; \mathbb{P} ,  \boldsymbol{\delta}_{n-1}(\mathsf{f})) =  \int \underbrace{ U(\boldsymbol{\delta}_{n-1}(\mathsf{f}), \delta(\mathrm{f}) ) }_{\text{utility function}} \; \mathrm{d}\mathbb{P}(\mathrm{f} | \boldsymbol{\delta}_{n-1}(\mathsf{f}) )
+$$
+where $\mathbb{P}(\cdot | \boldsymbol{\delta}_n(\mathsf{f}) )$ denotes the conditional distribution given the observed data $\boldsymbol{\delta}_n(\mathsf{f})$.
+
+- **Step 2: a utility function from a loss function** The \emph{negative Bayes' risk} utility function
+$$
+\begin{equation}
+   U(\boldsymbol{\delta}_{n-1}(\mathsf{f}), \delta(\mathrm{f}) ) = - \min_{\mathrm{g} \in \mathcal{F}} \int \underbrace{ L(\mathrm{g},\mathrm{g}') }_{\text{loss function}} \; \mathrm{d}\mathbb{P}(\mathrm{g}' | \boldsymbol{\delta}_{n-1}(\mathsf{f}) , \delta(\mathrm{f}) ) , \label{eq: U bayes risk}
+\end{equation}
+$$
+i.e. the negative expected loss when the Bayes decision rule $\mathrm{g}$ is used.
+
+::: {.aside-right}
+- So just need to pick a task-specific loss function $L$.
+- But (1) seems to involve optimisation?
+:::
+
+:::
+:::
+
+# Applications
+
+
+# Final Remarks
+
+:::{.unmarked}
+:::{.incremental}
+- **Proof-of-Concept:** An engine for automatic linear Gaussian conditioning, coupled to a high-level programming language for PN. ✓
+- **But:** GaussED is not (yet) at a stage of development where you should use it! Solutions ‘On the Market’:
+
+  - ▶ PPLs for conditioning GPs on function value data (e.g. Rasmussen and Nickisch, 2010; Matthews et al., 2017)
+  - ▶ Rainforth (2017, Chapter 11) and Ouyang et al. (2016); Kandasamy et al. (2018), who provided a high-level PPL for Bayesian SED.
+  - ▶ For numerics, the ProbNum Python library (ProbNum, 2021)!
+  - ▶ Paleyes et al. (2019) developed a PPL called Emukit, in which computer model emulation, Bayesian optimisation, and a number of probabilistic numerical methods are automated.
+  
+- **Thank you for your attention!**
+:::
+:::
+
+
+## References
+
+:::{.unmarked}
+- **Kandasamy, K., Neiswanger, W., Zhang, R., Krishnamurthy, A., Schneider, J., and Poczos, B.** (2018). Myopic Bayesian design of experiments via posterior sampling and probabilistic programming. *arXiv:1805.09964.*
+- **Matthews, A. G. d. G., Van Der Wilk, M., Nickson, T., Fujii, K., Boukouvalas, A., León-Villagrá, P., Ghahramani, Z., and Hensman, J.** (2017). GPflow: A Gaussian process library using tensorflow. Journal of Machine Learning Research, 18(40):1–6.
+- **Ouyang, L., Tessler, M. H., Ly, D., and Goodman, N.** (2016). Practical optimal experiment design with probabilistic programs. *arXiv:1608.05046.*
+- **Paleyes, A., Pullin, M., Mahsereci, M., Lawrence, N., and González, J.** (2019). Emulation of physical processes with Emukit. In *Proceedings of the 2nd Workshop on Machine Learning and the Physical Sciences, NeurIPS*.
+- **ProbNum** (2021). ProbNum: Learn to approximate. Approximate to learn. www.probabilistic-numerics.org.
+- **Rainforth, T. W. G.** (2017). Automating inference, learning, and design using probabilistic programming. PhD thesis, University of Oxford.
+- **Rasmussen, C. E. and Nickisch, H.** (2010). Gaussian processes for machine learning (GPML) toolbox. *The Journal of Machine Learning Research*, 11:3011–3015.
+- **Solin, A. and Särkkä, S.** (2019). Hilbert space methods for reduced-rank Gaussian process regression. *Statistics and Computing*, 30(2):419–446
+:::
