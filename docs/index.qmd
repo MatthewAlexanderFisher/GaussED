@@ -13,6 +13,7 @@ format:
     css: mathjax-guard.css
     fig-align: center
     margin: 0.02        # default ~0.04; smaller = slide closer to edges
+    embed-resources: true   # inlines images/CSS/JS
 
     highlight-style: dracula
     # toc: true
