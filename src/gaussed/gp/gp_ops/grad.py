@@ -5,7 +5,7 @@ from jax import Array
 import jax.numpy as jnp
 import jax
 
-from gaussed.gp.gp_ops.base import Operator, Functional, OpContext, FunSpec, KernelSpec, ShapeNeutralOp
+from gaussed.gp.gp_ops.base import Operator, Functional, OpContext, FunSpec, KernelSpec
 from gaussed.domains.base import Domain
 from gaussed.codomains.base import Codomain
 from gaussed.utils.shape_helpers import _prod, _append, _append_flat, _append_full
@@ -20,7 +20,7 @@ class Grad:
     use_rev: bool = False
     flatten_input_axes: bool = False
 
-    # ---------- shape transforms (USED below) ----------
+    #  shape transforms:
     def output_codomain(self, cod: Codomain, dom: Domain) -> Codomain:
         in_shape = dom.input_shape
         new_tail = ( _prod(in_shape), ) if self.flatten_input_axes else in_shape
@@ -36,7 +36,7 @@ class Grad:
         return _append_flat(right_shape, in_shape) if self.flatten_input_axes \
                else _append_full(right_shape, in_shape)
 
-    # ---------- unary on means: FunSpec -> FunSpec ----------
+    #  unary on means: FunSpec -> FunSpec
     def __call__(self, g: FunSpec, ctx: OpContext) -> FunSpec:
         dom = ctx.domain
         out_cod = self.output_codomain(g.codomain, dom)

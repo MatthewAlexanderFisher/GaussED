@@ -1,6 +1,23 @@
 from jax import Array
 import jax.numpy as jnp
 from typing import Tuple
+import math
+
+
+# Most important shape helper!
+def canonicalise_K_axes(K, L_shape, R_shape):
+    """Reorder (nF, nG, *L, *R) -> (nF, *L, nG, *R)."""
+    nF, nG = int(K.shape[0]), int(K.shape[1])
+    lrank, rrank = len(L_shape), len(R_shape)
+    # sanity
+    assert K.ndim == 2 + lrank + rrank, f"{K.shape} vs l={lrank}, r={rrank}"
+    if lrank == 0 and rrank == 0:
+        return K  # already (nF, nG)
+    row_axes = (0,) + tuple(range(2, 2 + lrank))                        # nF, *L
+    col_axes = (1,) + tuple(range(2 + lrank, 2 + lrank + rrank))        # nG, *R
+    return jnp.transpose(K, row_axes + col_axes)
+
+
 
 def move_front_axis(a: Array, dst: int) -> Array:
     """Move leading axis 0 to position `dst` (0 <= dst <= a.ndim-1). Used to transform TensorKernels"""
@@ -15,7 +32,8 @@ def _ensure_n_by_d(x: Array) -> Array:
     return x.reshape(-1, 1) if x.ndim == 1 else x  # (n,) -> (n,1)
 
 def _prod(shape: Tuple[int, ...]) -> int:
-    return int(jnp.prod(jnp.array(shape))) if shape else 1
+    # Pure-Python; safe under jit/grad
+    return math.prod(shape) if shape else 1
 
 def _append(shape: Tuple[int, ...], *more: int) -> Tuple[int, ...]:
     return tuple(shape) + tuple(more)
@@ -113,21 +131,25 @@ def unpack_mat2ev(M: Array,
 def _as_2d(V: Array):
     return (V[:, None], True) if V.ndim == 1 else (V, False)
 
+def _ensure_2d_rows(Y: Array) -> Array:
+    # reshape (..., Q) -> (N, Q) where N is the product of leading dims
+    return Y.reshape((-1, Y.shape[-1]))
+
 def _restore(U: Array, was_vec: bool):
     return U.squeeze(-1) if was_vec else U
 
 
-def pack_vec(v_raw: Array, out_shape: Tuple[int, ...]) -> Array:
-    """(n, *out_shape) -> (n*L, 1). Scalar-out -> (n,1)."""
+def pack_vec(v_raw: jnp.ndarray, out_shape: Tuple[int, ...]) -> Array:
     v_raw = jnp.asarray(v_raw)
-    n = v_raw.shape[0]
-    L = _prod(out_shape) if out_shape else 1
+    n = int(v_raw.shape[0])        # Python int
+    L = _prod(out_shape)           # Python int
     return v_raw.reshape(n * L, 1)
+
 
 def pack_vec_flat(v_raw: Array, out_shape: Tuple[int, ...]) -> Array:
     """(n, *out_shape) -> (n*L,). Keep only if you really need 1-D."""
     v_raw = jnp.asarray(v_raw)
-    n = v_raw.shape[0]
+    n = int(v_raw.shape[0])        # Python int
     L = _prod(out_shape) if out_shape else 1
     return v_raw.reshape(n * L,)
 

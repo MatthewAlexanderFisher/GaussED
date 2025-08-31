@@ -99,7 +99,7 @@ class PosteriorGP:
         Gst = as_stack(G)
 
         mG_raw = materialise_dense(self.rep.mean(Gst, self.ctx))    # (nG, *out_shape)
-        out_shape = tuple(mG_raw.shape[1:])
+        out_shape = tuple(mG_raw.shape[2:]) #TODO
         nG = mG_raw.shape[0]
         mG_col = pack_vec(mG_raw, out_shape)                        # (nG*L, 1)
 

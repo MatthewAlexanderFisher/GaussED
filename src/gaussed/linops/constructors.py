@@ -4,9 +4,10 @@ from typing import Callable, Tuple, Optional, Protocol, Any
 import jax
 import jax.numpy as jnp
 from jax import Array
+import math
 
 from gaussed.domains.base import Domain
-from gaussed.utils.shape_helpers import _prod, _as_2d, _restore
+from gaussed.utils.shape_helpers import _prod, canonicalise_K_axes, _restore, _as_2d
 from gaussed.linops.linop import LinearOp
 from gaussed.gp.gp_ops.probe import ProbeStack, _lift_left_all, _lift_right_all
 from gaussed.gp.gp_ops.base import KernelSpec, OpContext
@@ -27,97 +28,93 @@ class LinOpConstructor(Protocol):
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class DenseGramConstructor:
-    def __call__(self, ks: "KernelSpec", F: "ProbeStack", G: "ProbeStack", ctx: "OpContext") -> "LinearOp":
-        K = F.kernel(G, ks, ctx)                         # (nF, nG, *L, *R)
-        nF, nG = K.shape[:2]
-        tail = K.shape[2:]                           # (*L, *R)
+    def __call__(self, ks, F, G, ctx):
+        # Raw: (nF, nG, *L, *R)
+        K = F.kernel(G, ks, ctx)
 
         ksL  = _lift_left_all(F.probes[0].ops, ks, ctx)
         ksLR = _lift_right_all(G.probes[0].ops, ksL, ctx)
-        L_shape = tuple(getattr(ksLR, "left_shape", ()) or ())
+        L_shape = tuple(getattr(ksLR, "left_shape", ())  or ())
         R_shape = tuple(getattr(ksLR, "right_shape", ()) or ())
-        lrank, rrank = len(L_shape), len(R_shape)
 
+        Kc = canonicalise_K_axes(K, L_shape, R_shape)   # (nF, *L, nG, *R)
 
-        Ls = int(jnp.prod(jnp.array(L_shape)))  if ks.left_shape  else 1
-        Rs = int(jnp.prod(jnp.array(R_shape))) if ks.right_shape else 1
-        K2 = K.reshape(nF * Ls, nG * Rs)
+        nF, nG = int(K.shape[0]), int(K.shape[1])
+        Ls, Rs = _prod(L_shape), _prod(R_shape)
+        K2 = Kc.reshape(nF * Ls, nG * Rs)               # rows=test, cols=train
 
         def _as_2d(v): return (v[:, None], True) if v.ndim == 1 else (v, False)
-        def _restore(y, was_vec): return y.squeeze(-1) if was_vec else y
+        def _restore(y, s): return y.squeeze(-1) if s else y
         def mv(v): V2, s = _as_2d(v);  return _restore(K2 @ V2, s)
         def rmv(w): W2, s = _as_2d(w); return _restore(K2.T @ W2, s)
         return LinearOp((nF * Ls, nG * Rs), mv=mv, rmv=rmv, to_dense=lambda: K2)
 
-    # trivial pytree
     def tree_flatten(self): return (), ()
     @classmethod
     def tree_unflatten(cls, aux, children): return cls()
 
 # ---- MV-only: build mv/rmv with vmaps/einsums (no full K materialisation) ---
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class LazyGramConstructor:
+    """Non-dense LinearOp: matvecs via kernel contractions (no 2D materialisation)."""
+    def __call__(self, ks, F, G, ctx):
+        # Read shapes once (Python ints -> JIT-stable)
+        ksL  = _lift_left_all(F.probes[0].ops, ks, ctx)
+        ksLR = _lift_right_all(G.probes[0].ops, ksL, ctx)
+        L_shape = tuple(getattr(ksLR, "left_shape", ())  or ())
+        R_shape = tuple(getattr(ksLR, "right_shape", ()) or ())
+        Ls, Rs = _prod(L_shape), _prod(R_shape)
 
+        def mv(v):
+            V2, was_vec = _as_2d(v)                   # (nG*Rs, k)
+            # Infer nF, nG from a single K build (once per call)
+            K = F.kernel(G, ks, ctx)                  # (nF, nG, *L, *R)
+            nF, nG = int(K.shape[0]), int(K.shape[1])
 
+            V = V2.reshape(nG, *R_shape, -1)          # (nG, *R, k)
+            Kc = canonicalise_K_axes(K, L_shape, R_shape)  # (nF, *L, nG, *R)
 
-def TensorGramOp(k, X: Array, Y: Array, domain, to_dense: bool = False):
-    """
-    Linear operator for K(X,Y), where k(x,y) has shape (*left,*right).
-    Operator shape: (nx*L, ny*R), L=prod(left), R=prod(right).
-    mv:  (ny*R,) or (ny*R,k) -> (nx*L,) or (nx*L,k)
-    rmv: (nx*L,) or (nx*L,k) -> (ny*R,) or (ny*R,k)
-    """
-    nx = X.shape[0]; ny = Y.shape[0]
-    left  = tuple(getattr(k, "left_shape", ()))
-    right = tuple(getattr(k, "right_shape", ()))
-    L = _prod(left) if left else 1
-    R = _prod(right) if right else 1
+            # Contract over (nG, *R): result (nF, *L, k)
+            lrank, rrank = len(L_shape), len(R_shape)
+            axes_K = (1 + lrank,) + tuple(range(2 + lrank, 2 + lrank + rrank))
+            axes_V = (0,) + tuple(range(1, 1 + rrank))
+            Y = jnp.tensordot(Kc, V, axes=(axes_K, axes_V))   # (nF, *L, k)
 
-    def _as_2d(V: Array):
-        return (V[:, None], True) if V.ndim == 1 else (V, False)
-    def _restore(U: Array, was_vec: bool):
-        return U.squeeze(-1) if was_vec else U
+            Y2 = Y.reshape(nF * Ls, -1)               # (nF*Ls, k)
+            return _restore(Y2, was_vec)
 
-    # v_flat: (ny*R, k)  => out: (nx*L, k)
-    def mv(v_flat: Array) -> Array:
-        V2, was_vec = _as_2d(v_flat)            # (ny*R, k)
-        kR = V2.shape[1]
-        Vyrk = V2.reshape(ny, R, kR)            # (ny, R, k)
+        def rmv(w):
+            W2, was_vec = _as_2d(w)                   # (nF*Ls, k)
+            K = F.kernel(G, ks, ctx)                  # (nF, nG, *L, *R)
+            nF, nG = int(K.shape[0]), int(K.shape[1])
 
-        def row_apply(x):
-            # (ny, *L, *R) -> (ny, L, R)
-            KxY = jax.vmap(lambda y: k(x, y, domain))(Y).reshape(ny, L, R)
-            # sum over y and r: (ny,L,R) • (ny,R,k) -> (L,k)
-            return jnp.einsum("ylr,yrk->lk", KxY, Vyrk)     # (L, k)
+            W = W2.reshape(nF, *L_shape, -1)          # (nF, *L, k)
+            Kc = canonicalise_K_axes(K, L_shape, R_shape)  # (nF, *L, nG, *R)
 
-        out = jax.vmap(row_apply)(X)             # (nx, L, k)
-        out2d = out.reshape(nx * L, kR)          # (nx*L, k)
-        return _restore(out2d, was_vec)
+            # Contract over (nF, *L): result (nG, *R, k)
+            lrank, rrank = len(L_shape), len(R_shape)
+            axes_K = (0,) + tuple(range(1, 1 + lrank))
+            axes_W = (0,) + tuple(range(1, 1 + lrank))
+            Z = jnp.tensordot(Kc, W, axes=(axes_K, axes_W))  # (nG, *R, k)
 
-    # w_flat: (nx*L, k)  => out: (ny*R, k)
-    def rmv(w_flat: Array) -> Array:
-        W2, was_vec = _as_2d(w_flat)            # (nx*L, k)
-        kR = W2.shape[1]
-        Wxlk = W2.reshape(nx, L, kR)            # (nx, L, k)
+            Z2 = Z.reshape(nG * Rs, -1)               # (nG*Rs, k)
+            return _restore(Z2, was_vec)
 
-        def col_apply(y):
-            # (nx, *L, *R) -> (nx, L, R)
-            KYx = jax.vmap(lambda x: k(x, y, domain))(X).reshape(nx, L, R)
-            # sum over x and l: (nx,L,R) • (nx,L,k) -> (R,k)
-            return jnp.einsum("xlr,xlk->rk", KYx, Wxlk)     # (R, k)
+        # TODO: Can implement to_dense lazily (build once per call).
+        def to_dense():
+            K = F.kernel(G, ks, ctx)                  # (nF, nG, *L, *R)
+            nF, nG = int(K.shape[0]), int(K.shape[1])
+            Kc = canonicalise_K_axes(K, L_shape, R_shape)
+            return Kc.reshape(nF * Ls, nG * Rs)
 
-        out = jax.vmap(col_apply)(Y)            # (ny, R, k)
-        out2d = out.reshape(ny * R, kR)         # (ny*R, k)
-        return _restore(out2d, was_vec)
+        # And you need the operator shape:
+        # infer nF,nG with a tiny probe (or from F/G meta if you store those)
+        K_probe = F.kernel(G, ks, ctx)
+        nF, nG = int(K_probe.shape[0]), int(K_probe.shape[1])
 
-    def dense():
-        # (nx,ny,*L,*R) -> (nx,ny,L,R) -> (nx,L,ny,R) -> (nx*L,ny*R)
-        Kxy = jax.vmap(lambda x: jax.vmap(lambda y: k(x, y, domain))(Y))(X)
-        Kxy = Kxy.reshape(nx, ny, L, R)
-        return jnp.transpose(Kxy, (0, 2, 1, 3)).reshape(nx * L, ny * R)
+        return LinearOp((nF * Ls, nG * Rs), mv=mv, rmv=rmv, to_dense=to_dense)
 
-    return LinearOp(
-        shape=(nx * L, ny * R),
-        mv=mv,
-        rmv=rmv,
-        to_dense=(dense if to_dense else None),
-    )
-
+    def tree_flatten(self): return (), ()
+    @classmethod
+    def tree_unflatten(cls, aux, children): return cls()

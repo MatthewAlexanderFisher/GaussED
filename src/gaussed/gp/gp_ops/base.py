@@ -133,16 +133,19 @@ class Functional(Protocol):
     # default pair implementation (needs to be copied to all classes following this protocol)
     def pair(self, other: "Functional", ks: KernelSpec, ctx: OpContext) -> Array: ...
 
-@jax.tree_util.register_pytree_node_class
-@dataclass(frozen=True)
-class ShapeNeutralOp:
-    def output_codomain(self, cod: "Codomain", dom: "Domain") -> "Codomain":
-        return cod
-    def map_left_shape(self, left_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]:
-        return left_shape
-    def map_right_shape(self, right_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]:
-        return right_shape
-    def tree_flatten(self): return (), ()
-    @classmethod
-    def tree_unflatten(cls, aux, ch): return cls()
+
+
+
+# @jax.tree_util.register_pytree_node_class
+# @dataclass(frozen=True)
+# class ShapeNeutralOp:
+#     def output_codomain(self, cod: "Codomain", dom: "Domain") -> "Codomain":
+#         return cod
+#     def map_left_shape(self, left_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]:
+#         return left_shape
+#     def map_right_shape(self, right_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]:
+#         return right_shape
+#     def tree_flatten(self): return (), ()
+#     @classmethod
+#     def tree_unflatten(cls, aux, ch): return cls()
 
