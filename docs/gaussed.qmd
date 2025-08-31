@@ -1,6 +1,10 @@
 ---
 title: "GaussED"
 author: ""
+project:
+  type: website
+#   output-dir: /docs
+
 editor:
   render-on-save: true
 format:

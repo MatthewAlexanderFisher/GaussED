@@ -212,7 +212,7 @@
 <section id="introductions" class="title-slide slide level1 center">
 <h1>Introductions</h1>
 <p>Welcome!</p>
-<div id="10f22f36" class="cell" data-execution_count="1">
+<div id="cf47c769" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href=""></a><span class="im">import</span> jax</span>
@@ -285,7 +285,7 @@ f\sim \mathcal{GP}(m, k).
 </section>
 <section id="eval-functional" class="slide level2 scrollable">
 <h2><code>Eval</code> Functional</h2>
-<div id="d219cdd1" class="cell" data-fig-dpi="150" data-fig-height="4.5" data-fig-width="9" data-execution_count="2">
+<div id="58813399" class="cell" data-fig-dpi="150" data-fig-height="4.5" data-fig-width="9" data-execution_count="2">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href=""></a><span class="co"># --- GP prior ---</span></span>
@@ -365,7 +365,7 @@ f\sim \mathcal{GP}(m, k).
 <section id="partial-operator" class="slide level2 scrollable">
 <h2><code>Partial</code> Operator</h2>
 <h3 id="f-mid-partial_x-f-sim-mathcalgp"><span class="math inline">\(f \mid \partial_x f \sim \mathcal{GP}\)</span></h3>
-<div id="1bfa8500" class="cell" data-fig-dpi="150" data-fig-height="4.5" data-fig-width="9" data-execution_count="3">
+<div id="644260cf" class="cell" data-fig-dpi="150" data-fig-height="4.5" data-fig-width="9" data-execution_count="3">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href=""></a><span class="co"># --- GP prior ---</span></span>
@@ -445,7 +445,7 @@ f\sim \mathcal{GP}(m, k).
 <section id="gradient-operator" class="slide level2 scrollable">
 <h2><code>Gradient</code> Operator</h2>
 <h3 id="nabla-f-mid-mathcald"><span class="math inline">\(\nabla f \mid \mathcal{D}\)</span></h3>
-<div id="8eb76c8a" class="cell" data-fig-dpi="120" data-fig-height="4.5" data-fig-width="9" data-execution_count="4">
+<div id="c9ada94f" class="cell" data-fig-dpi="120" data-fig-height="4.5" data-fig-width="9" data-execution_count="4">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href=""></a><span class="co"># ----------------------------</span></span>
@@ -550,7 +550,7 @@ f\sim \mathcal{GP}(m, k).
 </div>
 </div>
 <h3 id="f-mid-nabla-f"><span class="math inline">\(f \mid \nabla f\)</span></h3>
-<div id="39497d61" class="cell" data-fig-dpi="150" data-fig-height="4.5" data-fig-width="9" data-execution_count="5">
+<div id="410ec5a8" class="cell" data-fig-dpi="150" data-fig-height="4.5" data-fig-width="9" data-execution_count="5">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href=""></a><span class="co"># ----------------------------</span></span>
@@ -679,7 +679,7 @@ K:\mathcal{X}\times\mathcal{X} \rightarrow \mathbb{R}^{D\times D}.
 K(x,y) = \Sigma \, k(x,y).
 \]</span></p>
 <h4 id="option-1-hard-code">Option 1: Hard Code</h4>
-<div id="4885b219" class="cell" data-execution_count="6">
+<div id="bf339ed8" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href=""></a>domain   <span class="op">=</span> Euclidean((<span class="dv">1</span>,))</span>
@@ -714,7 +714,7 @@ K(x,y) = \Sigma \, k(x,y).
 \Sigma = L^\top L
   \]</span></p>
 <p>where</p>
-<div id="73690af5" class="cell" data-execution_count="7">
+<div id="8dc472b3" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href=""></a>mat <span class="op">=</span> coreg_kernel._make_L()</span>
@@ -734,7 +734,7 @@ K(x, y) = \begin{pmatrix} k_1(x,y) &amp; 0 &amp; \ldots &amp; 0 \\ 0 &amp; k_2(x
 <p><span class="math display">\[
 f_{\text{ICM}} = L f
 \]</span></p>
-<div id="9cfa86fa" class="cell" data-execution_count="8">
+<div id="87b8380b" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href=""></a>domain   <span class="op">=</span> Euclidean((<span class="dv">1</span>,))</span>
@@ -759,7 +759,7 @@ f_{\text{ICM}} = L f
 <span id="cb10-20"><a href=""></a></span>
 <span id="cb10-21"><a href=""></a>probe.kernel(probe_other, ks, <span class="va">None</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
-<div class="cell-output cell-output-display" data-execution_count="30">
+<div class="cell-output cell-output-display" data-execution_count="19">
 <pre><code>Array([[[[1.00527746, 0.61238516],
          [0.61238516, 1.3783243 ]]]], dtype=float64)</code></pre>
 </div>
@@ -768,7 +768,7 @@ f_{\text{ICM}} = L f
 <section id="probabilistic-linear-solvers" class="slide level2 scrollable">
 <h2>Probabilistic Linear Solvers</h2>
 <h3 id="output">Output</h3>
-<div id="21ede0cd" class="cell" data-execution_count="9">
+<div id="cf84166d" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href=""></a><span class="co"># Problem</span></span>
@@ -780,7 +780,7 @@ f_{\text{ICM}} = L f
 <span id="cb12-7"><a href=""></a>b <span class="op">=</span> A <span class="op">@</span> v_true</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-<div id="42fe071a" class="cell" data-execution_count="10">
+<div id="b8a5a63a" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href=""></a>index_domain <span class="op">=</span> IndexDomain(N,  jnp.float64)</span>
@@ -816,7 +816,7 @@ f_{\text{ICM}} = L f
 <span id="cb13-31"><a href=""></a>C <span class="op">=</span> post.covariance(probe_te)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-<div id="34a842c3" class="cell" data-fig-dpi="150" data-fig-height="4.5" data-fig-width="9" data-execution_count="11">
+<div id="46b66097" class="cell" data-fig-dpi="150" data-fig-height="4.5" data-fig-width="9" data-execution_count="11">
 <div class="cell-output cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure>
