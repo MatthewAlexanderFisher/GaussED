@@ -425,10 +425,6 @@ where $r(t)$, $t \in [a,b]$, is a parameterisation of a line with endpoints $r(a
 
 # `GaussED` Design
 
-## `GaussED` Design Goals
-
-
-
 ## Package Structure {.scrollable}
 
 ```{mermaid, fig-align="center", out-width=60%}
@@ -483,72 +479,274 @@ graph TB
 ```
 
 
-## Kernel Representations
+## Kernel Representations {.scrollable}
 
-There are multiple ways to represent a kernel:
+A kernel $k(x,y)$ defines the covariance structure of a GP.
+There are multiple **representations** of $k$, each with different computational and modelling trade-offs:
 
-1. **Exactly:**
-2. **Inducing Points:**
-3. **Basis/Operator Centric:**
+### 1. **Exact (dense matrix form)**
+
+* **Definition:** Explicitly materialise the Gram matrix
+
+  $$
+  K_{XX} = \big[k(x_i, x_j)\big]_{i,j=1}^n.
+  $$
+* **Use case:** Small–medium $n$ (up to a few thousand).
+* **Pros:** Exact inference, numerically stable, minimal approximations.
+* **Cons:** $\mathcal{O}(n^3)$ time, $\mathcal{O}(n^2)$ memory.
 
 
-## Spectral GP Approach
+### 2. **Inducing Points (sparse / variational approximation)**
 
-## Linear Solvers
+* **Definition:** Low-rank Nyström factorisation:
 
-`GaussED` supports 
+  $$
+  K_{XX} \;\approx\; K_{XZ}\,K_{ZZ}^{-1}\,K_{ZX}, \quad |Z| = M \ll n.
+  $$
+* **Use case:** Large datasets, stochastic variational GPs, Bayesian optimisation.
+* **Pros:** Cost $\mathcal{O}(nM^2)$; integrates with variational inference.
+* **Cons:** Approximation depends on inducing point placement; extra parameters to optimise.
+
+### 3. **Basis / Operator-centric**
+
+* **Basis expansion (features):**
+  E.g. By Bochner’s theorem, stationary kernels admit Fourier features:
+
+  $$
+  k(x,y) \;\approx\; \phi(x)^\top \phi(y), \quad \phi:\mathbb{R}^d \to \mathbb{R}^m.
+  $$
+
+  * Needs $m$ basis functions.
+  * In high dimensions, $m$ typically scales **exponentially in $d$** → poor scalability.
+
+* **Operator view:**
+  Interpret $k$ as approximating the spectrum of a **self-adjoint operator** (e.g. Laplace, elliptic PDEs).
+
+  * Example: Matérn kernels arise from the inverse of $(\alpha - \Delta)^{\nu}$.
+  * Example: `SpectralBasis` of Solin and Sarkka (2019).
+
+* **Pros:** Computationally efficient; ties to geometry/physics.
+
+* **Cons:** Approximation error, scaling limits in high-dim.
+
+### 4. **Structured Kernel Interpolation (SKI / KISS-GP)**
+
+* **Definition:** Interpolate kernel values from a grid of inducing points:
+
+  $$
+  K_{XX} \;\approx\; W_X \, K_{UU} \, W_X^\top,
+  $$
+
+  where $U$ are grid points and $W_X$ are sparse interpolation weights.
+* **Use case:** Very large $n$, especially when inputs lie on (or near) a grid.
+* **Pros:** Exploits Kronecker/Toeplitz structure in $K_{UU}$; nearly linear scaling.
+* **Cons:** Requires grid structure; approximation quality depends on interpolation.
+Here’s a tightened, more polished version of that slide, highlighting the philosophy and concrete backends in a way that matches the style of your kernel-representation slide:
+
+### `GaussED` Approach {.scrollable}
+
+`GaussED` separates **kernel representation** from **operator semantics** via a `KernelRep` abstraction.
+
+* This makes **operators and probes** work uniformly, regardless of whether the kernel is exact, approximate, or basis-based.
+* Sequential Experimental Design (SED) interfaces directly with the representation layer — no special-casing needed.
+
+#### Currently implemented backends
+
+1. **`SpectralBasis`**
+   – \[`gaussed/backends/basis/spectral_basis.py`]
+   – Kernel represented through spectral decomposition / basis functions.
+
+2. **Random Fourier Features (`RFF`)**
+   – \[`gaussed/backends/basis/rff.py`]
+   – Approximate stationary kernels via finite random Fourier basis.
+
+3. **`ExactBackend`**
+   – Dense matrix form, $\mathcal{O}(n^3)$ cost.
+   – Reference implementation for small/medium $n$.
+
+4. **`InducingBackend`**
+   – Sparse variational/Nyström approximation with inducing points.
+   – Scales to large $n$.
+
+Backends are **pluggable**: swap between exact, inducing, or basis expansions while leaving operator/SED code unchanged.
+
 
 
 # GP Operators (`gaussed/gp/gp_ops`)
 
-## Math
+
+## Math {.scrollable}
+
+Starting with a Gaussian process
 
 $$
-f\sim\mathcal{GP}(m, k).
+f \;\sim\; \mathcal{GP}(m, k),
 $$
 
-Want to compute or **condition upon** functionals of $f$:
+where
+
+* $f : \mathcal{X} \to \mathbb{R}^{D_1 \times \cdots \times D_r}$ is a random function taking values in a tensor space,
+* $m:\mathcal{X}\to \mathbb{R}^{D_1 \times \cdots \times D_r}$ is the mean function,
+* $k:\mathcal{X}\times\mathcal{X} \to \mathbb{R}^{(D_1 \times \cdots \times D_r)\times(D_1 \times \cdots \times D_r)}$ is the covariance kernel, giving block/tensor covariance between outputs.
+
+### Conditioning on Functionals
+
+We are often interested not in $f$ itself, but in **linear functionals** of $f$, e.g.
+
+* point evaluations $f(x)$,
+* partial derivatives $\frac{\partial}{\partial x_i} f(x)$,
+* integrals $\int f(x)\,\mathrm{d}\mu(x)$,
+* or any linear combination thereof.
+
+Let $\delta$ denote a linear functional acting on $f$. Then
 
 $$
-f \mid \delta(f) = \delta(\mathrm{f}) \sim \mathcal{GP}(m, k).
+\delta(f) = \int_\mathcal{X} L(x)\, f(x)\, \mathrm{d}x,
 $$
 
-This is achieved via linear operators
+for some tensor-valued kernel $L(x)$.
+
+Since Gaussian processes are closed under linear maps,
+
+$$
+f \;\big|\; \delta(f) = \delta(\mathbf{f})
+\;\;\sim\;\; \mathcal{GP}\big(m_\delta,\, k_\delta\big),
+$$
+
+where the conditional mean and covariance are obtained by the standard Gaussian conditioning rules.
+
+### Linear Operators
+
+We formalise this using **linear operators**
+
+$$
+\mathcal{L} : \mathcal{F}(\mathcal{X},\mathbb{R}^{D_1\times\cdots\times D_r})
+\;\to\; \mathcal{F}(\mathcal{X},\mathbb{R}^{E_1\times\cdots\times E_s}),
+$$
+
+which map one tensor-valued function space to another. Examples:
+
+* **Derivative operator:** $(\mathcal{L}f)(x) = \partial_{x_i} f(x)$,
+* **Affine mixing:** $(\mathcal{L}f)(x) = A f(x) + b$ with $A \in \mathbb{R}^{E\times D}$,
+* **Stacked outputs:** $(\mathcal{L}f)(x) = (f_1(x), f_2(x))$.
+
+When combined with a functional $\delta$ (e.g. evaluation at a point), we obtain **probes**:
+
+$$
+\text{Probe} = (\mathcal{L}, \delta),
+$$
+
+which tells us how to transform $f$ before measurement.
+
+### Covariances under Operators
+
+If $f \sim \mathcal{GP}(m, k)$ and $\mathcal{L}, \mathcal{M}$ are linear operators, then
+
+$$
+\operatorname{cov}\!\big[ (\delta \circ \mathcal{L})(f),\, (\delta' \circ \mathcal{M})(f)\big]
+= (\delta \otimes \delta')\big[\, (\mathcal{L} \otimes \mathcal{M}) k \,\big].
+$$
 
 
-## `GaussED` Operator Syntax
+## `GaussED` Operator Syntax {.scrollable}
 
-The `gp_ops` module implements:
+`gp_ops` provides a small calculus for acting on GPs:
 
-1. Allows custom hooks for analytic linear pushforwards (e.g. kernel integral, kernel gradient, etc.)
-2. `Operator` outputs functions. `Functional` outputs real-values.
-3. We use the `Probe` interface to compose operators and conduct measurements. 
+1. **Analytic hooks (optional).** You can register closed-form **linear pushforwards** of kernels/means (e.g. integrals, gradients). If a hook is missing, numerical routines in `OpContext` are used.
+2. **Operators vs Functionals.**
+
+   * An **`Operator`** maps a tensor-valued function $f:\mathcal{X}\to\mathbb{R}^{D_1\times \cdots \times D_k}$ to another function.
+   * A **`Functional`** evaluates a function to a finite vector/array (e.g. point evaluation, integration), i.e. $\mathcal{F}\to\mathbb{R}^r$.
+3. **Probes compose operators and functionals.**
+   A **`Probe(ops, fnl)`** applies the tuple of `ops` (left-to-right) to the GP, then measures with `fnl`.
 
 
-### Example
+### Example: partial derivative then evaluate
 
 ```python
-partial_op = Partial(0) # an Operator
-eval_fnl = Eval(X) # a functional
+# Operators and functionals
+partial_op = Partial(0)      # ∂/∂x₁ (an Operator)
+eval_fnl   = Eval(X)         # evaluation at X (a Functional)
 
-partial_probe = Probe((partial_op,), eval_fnl) # Composes
+# Compose: (Eval ∘ ∂/∂x₁)
+partial_probe = Probe((partial_op,), eval_fnl)
 ```
 
-This probe returns the functional:
-$$
-\frac{\partial}{\partial x_1} f(x_1,\ldots, x_d) \Big\lvert_{x = X} 
-$$
-
-To apply a probe:
-
+This probe represents the functional
 
 $$
- f\sim \mathcal{GP}(m, k). 
+\left[\frac{\partial}{\partial x_1} f(x)\right]_{x \in X}
+\in \mathbb{R}^{|X|\times m},
 $$
 
-## The `Probe` protocol
+i.e. the partial derivatives of each output at the points $X$.
+
+### Kernels from probes
+
+Given a `KernelSpec` `ks` and an operator context `ctx`, the Gram operator for two probes $F, G$ is
+
+$$
+K_{F,G} \;=\; \operatorname{cov}\!\big[F(f),\,G(f)\big].
+$$
+
+Compute auto- and cross-covariances via `.kernel`:
+
+```python
+# Auto-covariance (derivative–derivative)
+K_dd = partial_probe.kernel(partial_probe, ks, ctx)
+
+# Cross-covariances with plain evaluations at Y
+other_probe = Probe((), Eval(Y))   # identity operator, then evaluate
+K_dy = partial_probe.kernel(other_probe, ks, ctx)  # ∂/∂x₁ on the left
+K_yd = other_probe.kernel(partial_probe, ks, ctx)  # ∂/∂x₁ on the right
+```
+
+Concretely, if $k$ is a scalar base kernel, then
+
+$$
+\big[K_{d,y}\big]_{ij} = \partial_{x_1} k(x_i, y_j),
+\qquad
+\big[K_{y,d}\big]_{ij} = \partial_{x_1} k(y_i, x_j).
+$$
+
+> **Note on shapes.** If the GP has $m$ outputs, the resulting blocks carry the output–output covariance structure. E.g. with a coregional ICM kernel, these are $m\times m$ blocks per $(i,j)$.
+
+
+### What `ctx` (the `OpContext`) does
+
+* Supplies **numerical fallbacks** (e.g. quadrature) when no analytic hook is registered for an operator–kernel pair.
+* Provides **precision** and **backend** control for stable evaluation of mean and kernel pushforwards.
+
 
 ## `Eval` Functional {.scrollable}
+
+
+### What it is
+
+* **Functional:** $\mathrm{Eval}(X)$ maps a GP $f:\mathcal{X}\to\mathbb{R}^{m}$ to its values at inputs $X=\{x_i\}_{i=1}^n$.
+* **As a probe:** $F = \text{Probe}(\,\varnothing,\, \mathrm{Eval}(X)\,)$.
+
+### Meaning
+
+$$
+F(f) \;=\; \big(f(x_1),\ldots,f(x_n)\big)\in\mathbb{R}^{n\times m}.
+$$
+
+### Prior and posterior with noisy data
+
+Given observations $y \in \mathbb{R}^{n\times m}$ with noise model $y = F(f) + \varepsilon$, $\varepsilon\sim\mathcal{N}(0,\Sigma_\varepsilon)$,
+
+$$
+\begin{aligned}
+m_{\text{post}}(x_\star)
+&= m(x_\star) \;+\; K_{x_\star X}\,(K_{XX} + \Sigma_\varepsilon)^{-1}\,(y - m(X)),\\[4pt]
+k_{\text{post}}(x_\star,x_\star)
+&= k(x_\star, x_\star) \;-\; K_{x_\star X}\,(K_{XX} + \Sigma_\varepsilon)^{-1}\,K_{X x_\star},
+\end{aligned}
+$$
+
+where $K_{XX} = k(X,X)$, $K_{x_\star X} = k(x_\star,X)$.
+(Shapes adapt block-wise for $m>1$.)
 
 ```{python}
 #| fig-align: center
@@ -592,6 +790,11 @@ prior_var  = jnp.diag(pack_ev2mat(gp.kernel_spec().k0(Xt, Xt), (1,), (1,)))
 m_post = post.mean(Fte)
 v_post = post.variance(Fte)
 
+```
+
+```{python}
+#| echo: False
+
 # --- Plot ---
 xplot = Xt.squeeze()
 
@@ -622,14 +825,60 @@ plt.legend()
 # plt.tight_layout()
 # mplcyberpunk.add_glow_effects()
 plt.show()
-
 ```
 
+### Why this matters
+
+* **Baseline probe:** Everything else (derivatives, integrals, affine mixes) reduces to “operator then evaluate”.
+* **Numerically stable:** Works with exact or iterative backends via `LinearOp`.
+
+**Key takeaway:** `Eval` is the canonical measurement functional; posterior GP is obtained by the usual Gaussian conditioning with $F=\mathrm{Eval}(X)$.
 
 ## `Partial` Operator {.scrollable}
 
+### What it is
 
-### $f \mid \partial_x f \sim \mathcal{GP}$
+* **Operator:** $\mathrm{Partial}(j)$ maps $f$ to $\partial_{x_j} f$.
+* **As a probe:** $F^{(\partial)} = \text{Probe}((\mathrm{Partial}(j),),\, \mathrm{Eval}(X))$.
+
+### Meaning
+
+$$
+F^{(\partial)}(f) \;=\; \Big(\tfrac{\partial}{\partial x_j} f(x_i)\Big)_{i=1}^n \in \mathbb{R}^{n\times m}.
+$$
+
+### Cross-covariances via operator calculus
+
+For a scalar base kernel $k$,
+
+$$
+\begin{aligned}
+\operatorname{cov}\!\big[\partial_{x_j} f(x),\, f(y)\big] &= \partial_{x_j} k(x,y),\\
+\operatorname{cov}\!\big[\partial_{x_j} f(x),\, \partial_{y_\ell} f(y)\big] &= \partial_{x_j}\partial_{y_\ell} k(x,y).
+\end{aligned}
+$$
+
+Thus the Gram for two probes is obtained by applying operators to $k$ **then** evaluating:
+
+$$
+K_{F^{(\partial)},\,G} \;=\; (\mathrm{Eval}\otimes \mathrm{Eval})\big[(\mathrm{Partial}(j)\otimes \mathcal{O}_G)\,k\big].
+$$
+
+### Conditioning on derivative data
+
+Given noisy derivative observations $y^{(\partial)} \approx \partial_{x_j} f(X)$,
+
+$$
+\begin{aligned}
+m_{\text{post}}(x_\star)
+&= m(x_\star) + K_{x_\star,\,\partial X}\,\big(K_{\partial X,\partial X}+\Sigma_\varepsilon\big)^{-1}\!\big(y^{(\partial)} - m_{\partial}(X)\big),\\[4pt]
+k_{\text{post}}(x_\star,x_\star)
+&= k(x_\star,x_\star) - K_{x_\star,\,\partial X}\,\big(K_{\partial X,\partial X}+\Sigma_\varepsilon\big)^{-1}\,K_{\partial X,\,x_\star},
+\end{aligned}
+$$
+
+with blocks like $K_{x_\star,\,\partial X} = \partial_{x} k(x_\star, X)$, $K_{\partial X,\partial X}=\partial_x\partial_y k(X,X)$.
+
 
 ```{python}
 #| fig-align: center
@@ -709,12 +958,24 @@ plt.show()
 
 
 
-## `Gradient` Operator {.scrollable}
+## `Grad` Operator {.scrollable}
 
+We may want to condition a Gaussian process not only on **function values**  but also on their **gradients**.  
+This is made possible by introducing the **gradient operator**:
 
+$$
+(\nabla f)(x) = \left( \frac{\partial f}{\partial x_1}(x), \ldots, 
+                     \frac{\partial f}{\partial x_d}(x) \right)^\top .
+$$
 
-### $\nabla f \mid \mathcal{D}$
+This is implemented in `GaussED` as the `Grad` operator.
 
+### **Gradient conditioned on evaluations**  
+
+ - Data: $f(X)$ observed.  
+ - Posterior: joint distribution of $\{ f(X), \nabla f(X_*) \}$.  
+ - Effect: gradients predicted consistently with observed values.  
+  
 
 ```{python}
 
@@ -823,7 +1084,12 @@ plt.tight_layout()
 plt.show()
 ```
 
-### $f \mid \nabla f$
+
+
+### **Evaluations conditioned on gradients**  
+   - Data: $\nabla f(X)$ observed.  
+   - Posterior: joint distribution of $\{ \nabla f(X), f(X_*) \}$.  
+   - Effect: function values reconstructed from slope information.  
 
 ```{python}
 #| fig-align: center
@@ -896,6 +1162,10 @@ F_grad = Probe(ops=(Grad(),), fnl=Eval(Xgrid))            # gradient values
 # Posterior means
 m_post_grid = post.mean(F_eval).reshape(nx*ny)            # (N,)
 g_post_grid = post.mean(F_grad).reshape(nx*ny, 2)         # (N,2)
+```
+
+```{python}
+#| echo: False
 
 # Plotting
 fig, axes = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=False)
@@ -940,6 +1210,7 @@ plt.show()
 
 ```
 
+In `GaussED`, these are unified via the **probe abstraction**: both evaluations and gradients are simply *operators* applied to the GP.
 
 ## Multioutput GPs {.scrollable}
 
@@ -1244,9 +1515,6 @@ v_true = jax.random.normal(key2, (N,))
 b = A @ v_true
 ```
 
-If $A$ is SPD then CG search directions are optimal in terms of minimising the matrix norm to the solution.
-
-If $A$ is not, then CG may not offer the best approach.
 
 ### Via `IndexDomain`
 
@@ -1349,24 +1617,53 @@ plt.show()
 
 ### Via a Vector-valued GP
 
+TODO...
 
-# FAQ {.scrollable}
+# Conclusion
 
-1. What linear solvers does `GaussED` support?
+## FAQ {.scrollable}
 
-::: {.aside-left}
-Modular approach. Abstracts linear maps as a `LinearOp`, provides standards for SVD/Cholesky/PCG/Lancoz. There is also a thin wrapper for `cola` (Compositional Linear Algebra - same backend used in `GPJax`). Would recommend `cola`.
-:::
-
-1. How does `GaussED` compare to other GP packages?
+### 1) Why another GP package?
 
 ::: {.aside-left}
-The principle novelties is the `gp_op` and `Probe` protocol, which makes it very easy to implement many different common PN methods and GP computations, and the design tying closely to a flexible `SED` interface. In addition, there is flexibility in the backend which allows you to plug in any GP approximation and things "just work".
+`GaussED` exists to make **operator-centric** GP work easy and fast:
 
-Other packages (e.g. `GPJax`, `GPyTorch`, `GPFlow`) have limited approaches for operators applied to GPs. Implementations of SED is typically built upon these base objects. In this sense, these packages
+* **Operator calculus & Probes.** An API for linear operators on GPs (derivatives, integrals, affine mixes, etc.) and for composing them with measurements via `Probe`. This directly supports PN methods and advanced GP constructions.
+* **SED-first design.** Sequential Experimental Design is not an afterthought; the abstractions (operators, probes, backends) make active learning/BO-style loops natural.
+* **Backend-agnostic linear algebra.** Everything talks `LinearOp`. Plug in dense/iterative solvers or a `cola` wrapper without changing the GP code.
+* **JAX-first, minimal deps.** Pure JAX, pytree-registered, fully JIT/`vmap`-friendly. (Use **Optax** for optimisation if you like; it’s optional.)
+* **Tensor-valued GPs.** Codomain bookkeeping makes multi-output/tensor outputs straightforward and consistent.
 :::
 
-3. Future of `GaussED` development
+### 2) What linear solvers does `GaussED` support?
 
-Everything is being rebuilt from the ground up in `JAX`.
+::: {.aside-left}
+Linear maps are abstracted as **`LinearOp`** with standard solver hooks:
 
+* **Direct:** Cholesky, SVD
+* **Iterative:** PCG, Lanczos
+
+There’s also a thin **`cola`** wrapper (Compositional Linear Algebra, JAX-native). `cola` is a good default for large problems.
+:::
+
+### 3) How does `GaussED` compare to other GP packages?
+
+::: {.aside-left}
+
+* **Stronger operator story.** The `gp_ops`/`Probe` protocol makes derivative/integral/affine transforms and cross-covariances routine.
+* **Flexible backends.** Swap exact/approximate GP backends or linear solvers without touching model code.
+* **SED integration.** Designs and acquisition-style workflows plug in cleanly.
+
+Packages like `GPJax`, `GPyTorch`, and `GPFlow` are good, but tend to fix the set of supported operators and build SED/PN on top of base GP classes, making custom operator pipelines harder to express.
+:::
+
+### 4) What’s the future of `GaussED`?
+
+::: {.aside-left}
+
+* **Pure JAX rebuild** end-to-end (no Equinox dependency).
+* **Stable pytrees + axes** patterns for transforms and params.
+* **Optimisation via Optax** (optional, recommended).
+* **Cleaner `LinearOp` interfaces** and better docs for operator hooks (analytic and numerical).
+
+:::
