@@ -1629,9 +1629,9 @@ TODO...
 `GaussED` exists to make **operator-centric** GP work easy and fast:
 
 * **Operator calculus & Probes.** An API for linear operators on GPs (derivatives, integrals, affine mixes, etc.) and for composing them with measurements via `Probe`. This directly supports PN methods and advanced GP constructions.
-* **SED-first design.** Sequential Experimental Design is not an afterthought; the abstractions (operators, probes, backends) make active learning/BO-style loops natural.
+* **SED-first design.** Sequential Experimental Design is not an afterthought: the abstractions (operators, probes, backends) make SED loops natural.
 * **Backend-agnostic linear algebra.** Everything talks `LinearOp`. Plug in dense/iterative solvers or a `cola` wrapper without changing the GP code.
-* **JAX-first, minimal deps.** Pure JAX, pytree-registered, fully JIT/`vmap`-friendly. (Use **Optax** for optimisation if you like; it’s optional.)
+* **JAX-first, minimal deps.** Pure JAX, pytree-registered, fully JIT/`vmap`-friendly. 
 * **Tensor-valued GPs.** Codomain bookkeeping makes multi-output/tensor outputs straightforward and consistent.
 :::
 
@@ -1661,7 +1661,7 @@ Packages like `GPJax`, `GPyTorch`, and `GPFlow` are good, but tend to fix the se
 
 ::: {.aside-left}
 
-* **Pure JAX rebuild** end-to-end (no Equinox dependency).
+* **Pure JAX rebuild** end-to-end.
 * **Stable pytrees + axes** patterns for transforms and params.
 * **Optimisation via Optax** (optional, recommended).
 * **Cleaner `LinearOp` interfaces** and better docs for operator hooks (analytic and numerical).
