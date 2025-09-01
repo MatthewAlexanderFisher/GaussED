@@ -4,7 +4,7 @@ $backgroundColor: #ffffff !default;
 
 // $headingFont: "Lato", Arial, sans-serif;
 // $mainFont:    "Lato", Arial, sans-serif;
-$mainFontSize: 24px !default;
+$mainFontSize: 20px !default;
 
 /* Slightly blend text toward the background hue.
    Increase the first percentage (e.g. 15%) for a stronger tint. */
@@ -33,7 +33,7 @@ $code-color:   mix($backgroundColor, #0820fe, 1%) !default;
 /*-- scss:rules --*/
 /* Extra CSS rules on top of variables */
 .reveal {
-  line-height: 3.4;
+  line-height: 1.4;
 }
 
 // .reveal h1, .reveal h2, .reveal h3 {

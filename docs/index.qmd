@@ -11,6 +11,7 @@ format:
   revealjs:
     template-partials:
       - title-slide.html
+    transition: fade
 
     theme: custom.scss
     css: custom.css
@@ -116,19 +117,11 @@ solver_fns = SolverFns(svd_solve_hook(), svd_sqrt_hook(), svd_logdet_hook())
 - **But:** Closed-form expressions for conditioning are limited.
 - **And so**: Most PN is rooted in linear Gaussian (process) conditioning.
 - **Idea:** An engine for automatic linear Gaussian conditioning, coupled to a high-level programming language for PN.
-:::
-:::
 
-::: {.unmarked}
-::: {.incremental}
 ::: {.aside-right}
 - we present a proof of concept
 :::
-:::
-:::
 
-::: {.unmarked}
-::: {.incremental}
 - **Opportunity 1:** Could rapidly attempt de novo tasks with PN (and beyond).
 
 ::: {.aside-right}
@@ -140,11 +133,294 @@ solver_fns = SolverFns(svd_solve_hook(), svd_sqrt_hook(), svd_logdet_hook())
 ::: {.aside-right}
 - we propose a general-purpose acquisition function
 :::
-   
+
 - **The result:** A Python package called `GaussED`.
+
+::: {.aside-right}
+- `https://github.com/MatthewAlexanderFisher/GaussED`
+:::
+
 :::
 :::
 
+## `GaussED`: A Proof-of-Concept
+
+![](intro1.png){fig-align="center" width=60%}
+
+
+## An Engine for Automatic Linear Gaussian Conditioning
+
+**Aim:**  Avoid tedious analytical calculations for each pair of linear operator and kernel.
+
+::: {.unmarked}
+::: {.incremental}
+- **Step 1:** Construct a common basis over compact $\mathcal{X} \subseteq \mathbb{R}^d$:
+$$
+\begin{align*}
+    -\Delta \phi_i(x) & = \lambda_i \phi_i(x), & \quad & x \in \mathcal{X}, \\
+    \phi_i(x) & = 0, & \quad & x \in \partial \mathcal{X}.
+\end{align*}
+$$
+e.g. for $\mathcal{X} = [0,1]^d$, $\phi_{j}(x) = \prod_{i=1}^d \sin\left(\pi j_i x_i\right)$, where $j = (j_1,\ldots,j_d) \in \mathbb{Z}^d$.
+
+- **Step 2:**  Represent the kernel in the new basis:
+$$ 
+\begin{align*}
+\textstyle k(x,y) \approx \sum_i \sum_j K_{i,j} \phi_i(x) \phi_j(y)
+\end{align*}
+$$
+e.g. for translation-invariant $k$ (Solin and Sarkka, 2019).
+$$
+\begin{align*}
+    \textstyle k(x,y) = \frac{1}{(2\pi)^d}\int s(\omega) \exp\left(i \langle \omega, x - y\rangle \right) \, \mathrm{d}\omega \implies
+    k(x,y) \approx \sum_j s\left(\sqrt{\lambda_j}\right) \phi_j(x)\phi_j(y).
+\end{align*}
+$$
+
+- **Step 3**  Represent linear functionals in the new basis:
+$$
+\begin{align*}
+\textstyle L \left( \sum_i c_i \phi_i \right) = \sum_i c_i L(\phi_i) \approx \sum_i c_i \sum_j L_{i,j} \phi_j
+\end{align*}
+$$
+e.g. for $L = \Delta$ have $L \phi_i = - i^2 \phi_i$ where $\phi_i(x) = \sin(\pi i x)$.
+
+::: {.aside-right}
+- $\therefore$ the linear operator and the kernel are decoupled
+:::
+
+:::
+:::
+
+## `GaussED`: A Proof-of-Concept
+
+![](intro1.png){fig-align="center" width=50%}
+
+
+## Sequential Experimental Design (`gaussed/sed`)
+
+**Aim:** Avoid tedious searching for good acquisition function for each new task.
+
+::: {.fragment}
+**Set-up:**
+
+- (truth) $\mathrm{f}: \mathcal{X} \rightarrow \mathbb{R}^D$.
+- (prior) $\mathbb{P}$, e.g. a Gaussian process, supported on $\mathcal{F}$.
+- (design set) $\mathcal{D} \subset \{\text{continuous linear functionals on } \mathcal{F}\}$.
+- (data) $\boldsymbol{\delta}_{n-1}(\mathrm{f}) = [\delta_1(\mathrm{f}), \ldots, \delta_{n-1}(\mathrm{f})] \in \mathbb{R}^{D\times (n-1)}$
+:::
+
+::: {.fragment}
+**Sequential Experimental Design:** At iteration $n$, select an experiment $\delta_n$ from the design set in order that an *acquisition function* is maximised
+$$
+\delta_n \in \arg\max_{\delta \in \mathcal{D}} A(\delta; \mathbb{P}, \boldsymbol{\delta}_{n-1}(\mathrm{f})).
+$$
+
+e.g. expected improvement for Bayesian optimisation.
+:::
+
+::: {.fragment}
+::: {.aside-right}
+but what if we don’t know a good acquisition function $A$?
+:::
+:::
+
+## A General-Purpose Acquisition Function
+::: {.unmarked}
+::: {.incremental}
+- **Idea:** Use classical but overlooked ideas from Bayesian decision theory!
+- **Step 1:** An acquisition function from a utility function. The \emph{expected utility} acquisition function is
+$$
+A(\delta; \mathbb{P} ,  \boldsymbol{\delta}_{n-1}(\mathsf{f})) =  \int \underbrace{ U(\boldsymbol{\delta}_{n-1}(\mathsf{f}), \delta(\mathrm{f}) ) }_{\text{utility function}} \; \mathrm{d}\mathbb{P}(\mathrm{f} | \boldsymbol{\delta}_{n-1}(\mathsf{f}) )
+$$
+where $\mathbb{P}(\cdot | \boldsymbol{\delta}_n(\mathsf{f}) )$ denotes the conditional distribution given the observed data $\boldsymbol{\delta}_n(\mathsf{f})$.
+
+- **Step 2: a utility function from a loss function** The \emph{negative Bayes' risk} utility function
+$$
+\begin{equation} \tag{1}
+   U(\boldsymbol{\delta}_{n-1}(\mathsf{f}), \delta(\mathrm{f}) ) = - \min_{\mathrm{g} \in \mathcal{F}} \int \underbrace{ L(\mathrm{g},\mathrm{g}') }_{\text{loss function}} \; \mathrm{d}\mathbb{P}(\mathrm{g}' | \boldsymbol{\delta}_{n-1}(\mathsf{f}) , \delta(\mathrm{f}) ) , \label{eq: U bayes risk}
+\end{equation}
+$$
+i.e. the negative expected loss when the Bayes decision rule $\mathrm{g}$ is used.
+
+::: {.aside-right}
+- So just need to pick a task-specific loss function $L$.
+- But (1) seems to involve optimisation?
+:::
+
+:::
+:::
+
+## Tractability of Acquisition Function
+
+Consider a loss function of the form $L(\mathrm{f},\mathrm{g}) = \|q(\mathrm{f}) - q(\mathrm{g})\|^2$.
+
+::: {.unmarked}
+::: {.incremental}
+- Under mild conditions, (1) is equal to
+$$
+\begin{align*}
+    - \frac{1}{2} \iint  L(\mathrm{g},\mathrm{g}') \; \mathrm{d}\mathbb{P}_f(\mathrm{g} | \boldsymbol{\delta}_{n-1}(\mathsf{f})  , \delta(\mathrm{f})  ) \; \mathrm{d}\mathbb{P}_f(\mathrm{g}' | \boldsymbol{\delta}_{n-1}(\mathsf{f}) , \delta(\mathrm{f}) ) .
+\end{align*}
+$$
+
+- Thus, from the law of total probability, 
+$$
+\begin{align*}
+    A(\delta; \mathbb{P}_f ,  \boldsymbol{\delta}_{n-1}(\mathsf{f})) =  - \frac{1}{2} \iint L(\mathrm{g},\mathrm{g}') \; \mathrm{d}\mathbb{P}_f(\mathrm{g}' | \boldsymbol{\delta}_{n-1}(\mathsf{f})  , \delta(\mathrm{g})  ) \; \mathrm{d}\mathbb{P}_f( \mathrm{g} | \boldsymbol{\delta}_{n-1}(\mathsf{f})  ). 
+\end{align*}
+$$
+
+::: {.aside-right}
+- $\therefore$ the acquisition function $A$ (and its gradient) can be unbiasedly estimated.
+- (squared error loss is `wlog' since $q(\cdot)$ is general)
+:::
+
+:::
+:::
+
+
+# Examples
+
+## Probabilistic Solution of PDEs
+
+**Task:** Solve the PDE
+$$
+\begin{alignat*}{2}
+    \Delta \mathsf{f}(x) &= \mathsf{g}(x), &&\qquad x \in \mathcal{X} = [-1,1]^2, \\
+    \mathsf{f}(x) &= 0, &&\qquad x \in \partial\mathcal{X}
+\end{alignat*}
+$$
+
+with limited queries to $\mathsf{g}(\cdot)$.
+
+::: {.fragment}
+**Implementation in** `GaussED`:
+
+```python
+key = jax.random.PRNGKey(0)
+
+domain = Rectangle(lo=jnp.array([-1., -1.]), hi=jnp.array([1., 1.])) 
+codomain = Codomain((1,))
+mean = ConstantMeanFun()
+kernel = IMQ()
+
+gp = GP(domain, codomain, mean, kernel)
+measurement = Measurement((Laplace(),),  Eval) 
+
+acq = BayesRisk(qoi = gp, measurement, key=key)
+sed = SED(acq, g)
+
+sed.run(n = 150)
+```
+:::
+
+
+## Probabilistic Solution of PDEs
+
+**Task:** Solve the PDE
+$$
+\begin{alignat*}{2}
+    \Delta \mathsf{f}(x) &= \mathsf{g}(x), &&\qquad x \in \mathcal{X} = [-1,1]^2, \\
+    \mathsf{f}(x) &= 0, &&\qquad x \in \partial\mathcal{X}
+\end{alignat*}
+$$
+
+with limited queries to $\mathsf{g}(\cdot)$.
+
+**Results:** 
+
+![*Probabilistic Solution of PDEs:* (a) Source term $\mathsf{g}$ with design points (red) determined by SED overlaid. (b) Mean of $f | \boldsymbol{\delta}_n(\mathsf{f})$, the posterior obtained using \ac{SED}. (c) Fill distance (FD; red) versus the number $n$ of iterations in SED, with theoretical optimal slope $-\tfrac{1}{2}$ (blue) displayed.](pde_experiment.png){fig-align="center" width=85%}
+
+
+## Tomographic Reconstruction
+
+**Task:** Reconstruct a latent function $\mathsf{f}:\mathcal{X} \rightarrow\mathbb{R}$, where $\mathcal{X} = [-1,1]^d$, using line-integral data of the form
+$$
+\begin{equation*}
+    \delta(\mathsf{f}) =  \int_a^b \mathsf{f}(r(t))\left|r'(t)\right| \, \mathrm{d}t,
+\end{equation*}
+$$
+where $r(t)$, $t \in [a,b]$, is a parameterisation of a line with endpoints $r(a), r(b) \in \partial \mathcal{X}$. 
+
+::: {.fragment}
+
+**Results:** (32 lines of code in `GaussED`)
+
+![*Tomographic Reconstruction::* The top row displays experimental designs, overlaying the latent $\mathsf{f}$. Each red bar indicates the region over which $9$ equally-spaced line integrals were computed. The bottom row displays the corresponding mean of $f | \boldsymbol{\delta}_n(\mathsf{f})$.](tomograph.png){fig-align="center" width=85%}
+
+:::
+
+
+## Gradient Based Bayesian Optimisation
+
+**Task:**  Find the maximum likelihood estimator for parameters $(\alpha,\beta)$ of a noisily observed ODE model with limited calls to the ODE.
+
+$$
+\begin{equation*}
+    \delta(\mathsf{f}) =  \int_a^b \mathsf{f}(r(t))\left|r'(t)\right| \, \mathrm{d}t,
+\end{equation*}
+$$
+where $r(t)$, $t \in [a,b]$, is a parameterisation of a line with endpoints $r(a), r(b) \in \partial \mathcal{X}$. 
+
+::: {.fragment}
+::: {.unmarked}
+**Approach:** Model the log-likelihood, $\mathsf{f} = \log \mathcal{L}(\alpha,\beta)$, as a GP, and take:  
+
+- ▶ quantity of interest $q(\mathsf{f}) = \max_{x \in\mathcal{X}} \mathsf{f}(x)$
+- ▶ design set $\mathcal{D}$ contains pointwise evaluation of $\mathcal{L}$ and $\nabla \mathcal{L}$.
+
+:::
+:::
+
+## Gradient Based Bayesian Optimisation
+
+**Task:**  Find the maximum likelihood estimator for parameters $(\alpha,\beta)$ of a noisily observed ODE model with limited calls to the ODE.
+
+$$
+\begin{equation*}
+    \delta(\mathsf{f}) =  \int_a^b \mathsf{f}(r(t))\left|r'(t)\right| \, \mathrm{d}t,
+\end{equation*}
+$$
+where $r(t)$, $t \in [a,b]$, is a parameterisation of a line with endpoints $r(a), r(b) \in \partial \mathcal{X}$. 
+
+
+**Results:** (17 lines of code were required in `GaussED`)
+
+![*Gradient-Based Bayesian Optimisation:* (a) Mean of $f | \boldsymbol{\delta}_n(\mathsf{f})$, the posterior after $n=90$ total evaluations. (b) Log-likelihood $\mathsf{f}$, with design points overlaid.  Colour indicates the order in which points were selected in SED. (c) Maximum value of the likelihood obtained during the first $m$ iterations of each optimisation method. (d) Location of the maximum value along the optimisation path, where the coloured $✖$ symbols indicate the maximum value obtained.](bo.png){fig-align="center" width=85%}
+
+
+# Final Remarks
+
+:::{.unmarked}
+:::{.incremental}
+- **Proof-of-Concept:** An engine for automatic linear Gaussian conditioning, coupled to a high-level programming language for PN. ✓
+- **But:** GaussED is not (yet) at a stage of development where you should use it! Solutions ‘On the Market’:
+
+  - ▶ PPLs for conditioning GPs on function value data (e.g. Rasmussen and Nickisch, 2010; Matthews et al., 2017)
+  - ▶ Rainforth (2017, Chapter 11) and Ouyang et al. (2016); Kandasamy et al. (2018), who provided a high-level PPL for Bayesian SED.
+  - ▶ For numerics, the ProbNum Python library (ProbNum, 2021)!
+  - ▶ Paleyes et al. (2019) developed a PPL called Emukit, in which computer model emulation, Bayesian optimisation, and a number of probabilistic numerical methods are automated.
+  
+- **Thank you for your attention!**
+:::
+:::
+
+
+## References {.scrollable}
+
+:::{.unmarked}
+- **Gunter, T., Osborne, M. A., Garnett, R., Hennig, P., and Roberts, S. J.** (2014). Sampling for inference in probabilistic models with fast Bayesian quadrature. *Advances in Neural Information Processing Systems*, **27**:2789–2797.
+- **Kandasamy, K., Neiswanger, W., Zhang, R., Krishnamurthy, A., Schneider, J., and Poczos, B.** (2018). Myopic Bayesian design of experiments via posterior sampling and probabilistic programming. *arXiv:1805.09964.*
+- **Matthews, A. G. d. G., Van Der Wilk, M., Nickson, T., Fujii, K., Boukouvalas, A., León-Villagrá, P., Ghahramani, Z., and Hensman, J.** (2017). GPflow: A Gaussian process library using tensorflow. Journal of Machine Learning Research, 18(40):1–6.
+- **Ouyang, L., Tessler, M. H., Ly, D., and Goodman, N.** (2016). Practical optimal experiment design with probabilistic programs. *arXiv:1608.05046.*
+- **Paleyes, A., Pullin, M., Mahsereci, M., Lawrence, N., and González, J.** (2019). Emulation of physical processes with Emukit. In *Proceedings of the 2nd Workshop on Machine Learning and the Physical Sciences, NeurIPS*.
+- **ProbNum** (2021). ProbNum: Learn to approximate. Approximate to learn. www.probabilistic-numerics.org.
+- **Rainforth, T. W. G.** (2017). Automating inference, learning, and design using probabilistic programming. PhD thesis, University of Oxford.
+- **Rasmussen, C. E. and Nickisch, H.** (2010). Gaussian processes for machine learning (GPML) toolbox. *The Journal of Machine Learning Research*, 11:3011–3015.
+- **Solin, A. and Särkkä, S.** (2019). Hilbert space methods for reduced-rank Gaussian process regression. *Statistics and Computing*, 30(2):419–446
+
+:::
 
 
 # `GaussED` Design
@@ -785,17 +1061,26 @@ print(K_icm_affine)
 
 They produce the same output!
 
-## `Linearise` Operator
+## `Linearise` Operator {.scrollable}
 
-Suppose we have $f: \mathcal{X} \rightarrow \mathbb{R}^D$ and a function $g:\mathbb{R}^D\rightarrow \mathbb{R}^D$, then $g(f)$ is no longer Gaussian if $g$ isn't linear :( 
+Suppose we have $f: \mathcal{X} \rightarrow \mathbb{R}^D$ and a function $g:\mathbb{R}^D\rightarrow \mathbb{R}^D$. Then $g \circ f$ is Gaussian if and only if $g$ is linear.
 
-Linearise $g(y) \approx g(y_0) + J_g(y_0)(y - y_0)$. About reference $f_0$:
+**Approximate Solution:** Linearise $g(y) \approx g(y_0) + J_g(y_0)(y - y_0)$. About a reference $f_0$, we have:
 
-$$ g(f(x)) \approx g(f_0(x)) + J_g(f_0(x))(f(x) - f_0(x)). $$
+$$ 
+g(f(x)) \approx g(f_0(x)) + J_g(f_0(x))(f(x) - f_0(x)). 
+$$
 
-This is used in Warped-Sequential Active Bayesian integration (WSABI). 
+This is used in Warped-Sequential Active Bayesian integration (WSABI) of Gunter et al. (2019). 
 
 **Motivation**: Want to normalise posteriors (some important prior information is that posterior density is non-negative!)
+
+In the following we linearise based upon $g(y) = \alpha + y^2/2$.
+
+```{python}
+#| echo: False
+backend  = ExactBackend(solverfns=solver_fns)
+```
 
 ```{python}
 #| fig-align: center
@@ -810,7 +1095,6 @@ codomain = Codomain((1,))
 mean     = ZeroMeanFun(domain, codomain)
 rbf_params = RBFParams(lengthscale=jnp.array(0.1), amplitude=jnp.array(1.0))
 kernel   = RBFKernel(rbf_params)
-backend  = ExactBackend(solverfns=solver_fns)
 
 gp = GP(domain, codomain, mean, kernel, backend)
 
@@ -839,20 +1123,14 @@ prior_var  = jnp.diag(pack_ev2mat(gp.kernel_spec().k0(Xt, Xt), (1,), (1,)))
 m_post = post.mean(Fte)          # shape (n,1)
 v_post = post.variance(Fte)      # shape (n,)
 
-# ---------------------------------------------------------------------
-# Linearised positivity warp at prediction time (Softplus)
-# g(u) = softplus(u), J_g(u) computed automatically via AD
-# Reference f0(x) := current posterior mean of the latent f
-# ---------------------------------------------------------------------
-
+# f_0 function
 def ref_fn(X: Array) -> Array:
-    # posterior latent mean at inputs X (shape (n,1))
-    return post.mean(Probe(ops=(), fnl=Eval(X)))  # (n,1)
+    return post.mean(Probe(ops=(), fnl=Eval(X)))  
 
-softplus = lambda u: 0.1 + u ** 2 #jax.nn.softplus(u)  # (...,1) -> (...,1)
+g = lambda u: 0.1 + u ** 2 / 2
 
-# jacobian=None => AD fallback via jax.jacfwd(softplus)
-op_pos = Linearise(forward=softplus, jacobian=None, ref_fn=ref_fn)
+# jacobian=None => AD fallback via jax.jacfwd(g)
+op_pos = Linearise(forward=g, jacobian=None, ref_fn=ref_fn)
 
 # Test probe that applies the linearised warp
 Fte_pos = Probe(ops=(op_pos,), fnl=Eval(Xt))
@@ -860,6 +1138,11 @@ Fte_pos = Probe(ops=(op_pos,), fnl=Eval(Xt))
 # Posterior under linearised warp (still Gaussian thanks to affine map)
 m_pos = post.mean(Fte_pos)       # (n,1)
 v_pos = post.variance(Fte_pos)   # (n,)
+
+```
+
+```{python}
+#| echo: False
 
 # --- Plot ---
 xplot = Xt.squeeze()
@@ -873,8 +1156,8 @@ plt.fill_between(xplot,
                  prior_mean - 2*jnp.sqrt(prior_var),
                  prior_mean + 2*jnp.sqrt(prior_var),
                  alpha=0.3, label="$\\pm 2\\sigma$")
-plt.plot(xplot, prior_mean, "k--", label="mean")
-plt.scatter(Xtr.squeeze(), y, s=25, label="train")
+plt.plot(xplot, prior_mean, "k--", label="Mean")
+plt.scatter(Xtr.squeeze(), y, s=25, label="Data")
 plt.legend()
 
 # Posterior (unwarped)
@@ -884,24 +1167,23 @@ plt.fill_between(xplot,
                  m_post.reshape(-1,) - 2*jnp.sqrt(v_post),
                  m_post.reshape(-1,) + 2*jnp.sqrt(v_post),
                  alpha=0.3, label="$\\pm 2\\sigma$")
-plt.plot(xplot, m_post, label="mean")
-plt.scatter(Xtr.squeeze(), y, s=25, label="train")
+plt.plot(xplot, m_post, label="Mean")
+plt.scatter(Xtr.squeeze(), y, s=25, label="Data")
 plt.legend()
 
 # Posterior with linearised softplus warp
 plt.subplot(1,3,3)
-plt.title("Linearised Softplus Warp (predict-only)")
+plt.title("Linearised $g$ Warp")
 plt.fill_between(xplot,
                  m_pos.reshape(-1,) - 2*jnp.sqrt(v_pos),
                  m_pos.reshape(-1,) + 2*jnp.sqrt(v_pos),
                  alpha=0.3, label="$\\pm 2\\sigma$")
-plt.plot(xplot, m_pos, label="mean")
-plt.scatter(Xtr.squeeze(), softplus(y), s=25, label="train")
+plt.plot(xplot, m_pos, label="Mean")
+plt.scatter(Xtr.squeeze(), g(y), s=25, label="Data")
 plt.legend()
 
 plt.tight_layout()
 plt.show()
-
 ```
 
 
@@ -1068,108 +1350,23 @@ plt.show()
 ### Via a Vector-valued GP
 
 
+# FAQ {.scrollable}
 
+1. What linear solvers does `GaussED` support?
 
-# Sequential Experimental Design (`gaussed/sed`)
-
-## Aims and Setup
-
-**Aim:** Avoid tedious searching for good acquisition function for each new task.
-
-**Set-up:**
-
-- (truth) $\mathrm{f}: \mathcal{X} \rightarrow \mathbb{R}^D$.
-- (prior) $\mathbb{P}$, e.g. a Gaussian process, supported on $\mathcal{F}$.
-- (design set) $\mathcal{D} \subset \{\text{continuous linear functionals on } \mathcal{F}\}$.
-- (data) $\boldsymbol{\delta}_{n-1}(\mathrm{f}) = [\delta_1(\mathrm{f}), \ldots, \delta_{n-1}(\mathrm{f})] \in \mathbb{R}^{D\times (n-1)}$
-
-
-**Sequential Experimental Design:** At iteration $n$, select an experiment $\delta_n$ from the design set in order that an *acquisition function* is maximised
-$$
-\delta_n \in \arg\max_{\delta \in \mathcal{D}} A(\delta; \mathbb{P}, \boldsymbol{\delta}_{n-1}(\mathrm{f})).
-$$
-
-e.g. expected improvement for Bayesian optimisation.
-
-but what if we don’t know a good acquisition function A?
-
-## Quantities of Interest
-Hard to come up with acquisition functions for general problems. However, it is very natural to have a **quantity of interest** (QoI) 
-$$
-Q(\mathrm{f}).
-$$
-
-1. **Bayesian Optimisation (BO):** In Bayesian Optimisation, the quantity of interest is:
-   $$ 
-   Q(\mathrm{f}) = \quad \max_x \mathrm{f}(x).
-   $$ 
-   This is **non-linear**.
-2. **Bayesian Cubature (BC):** In Bayesian Cubature, the quantity of interest is
-   $$
-   Q(\mathrm{f}) = \int_{R} \mathrm{f}(x) \,\mathrm{d}\mu
-   $$
-   This is **linear**.
-3. **Regression:** In regression, the quantity of interest is the identity 
-   $$
-    Q(\mathrm{f}) = \mathrm{f}
-   $$
-
-
-## A General-Purpose Acquisition Function
-::: {.unmarked}
-::: {.incremental}
-- **Idea:** Use classical but overlooked ideas from Bayesian decision theory!
-- **Step 1:** An acquisition function from a utility function. The \emph{expected utility} acquisition function is
-$$
-A(\delta; \mathbb{P} ,  \boldsymbol{\delta}_{n-1}(\mathsf{f})) =  \int \underbrace{ U(\boldsymbol{\delta}_{n-1}(\mathsf{f}), \delta(\mathrm{f}) ) }_{\text{utility function}} \; \mathrm{d}\mathbb{P}(\mathrm{f} | \boldsymbol{\delta}_{n-1}(\mathsf{f}) )
-$$
-where $\mathbb{P}(\cdot | \boldsymbol{\delta}_n(\mathsf{f}) )$ denotes the conditional distribution given the observed data $\boldsymbol{\delta}_n(\mathsf{f})$.
-
-- **Step 2: a utility function from a loss function** The \emph{negative Bayes' risk} utility function
-$$
-\begin{equation}
-   U(\boldsymbol{\delta}_{n-1}(\mathsf{f}), \delta(\mathrm{f}) ) = - \min_{\mathrm{g} \in \mathcal{F}} \int \underbrace{ L(\mathrm{g},\mathrm{g}') }_{\text{loss function}} \; \mathrm{d}\mathbb{P}(\mathrm{g}' | \boldsymbol{\delta}_{n-1}(\mathsf{f}) , \delta(\mathrm{f}) ) , \label{eq: U bayes risk}
-\end{equation}
-$$
-i.e. the negative expected loss when the Bayes decision rule $\mathrm{g}$ is used.
-
-::: {.aside-right}
-- So just need to pick a task-specific loss function $L$.
-- But (1) seems to involve optimisation?
+::: {.aside-left}
+Modular approach. Abstracts linear maps as a `LinearOp`, provides standards for SVD/Cholesky/PCG/Lancoz. There is also a thin wrapper for `cola` (Compositional Linear Algebra - same backend used in `GPJax`). Would recommend `cola`.
 :::
 
-:::
-:::
+1. How does `GaussED` compare to other GP packages?
 
-# Applications
+::: {.aside-left}
+The principle novelties is the `gp_op` and `Probe` protocol, which makes it very easy to implement many different common PN methods and GP computations, and the design tying closely to a flexible `SED` interface. In addition, there is flexibility in the backend which allows you to plug in any GP approximation and things "just work".
 
-
-# Final Remarks
-
-:::{.unmarked}
-:::{.incremental}
-- **Proof-of-Concept:** An engine for automatic linear Gaussian conditioning, coupled to a high-level programming language for PN. ✓
-- **But:** GaussED is not (yet) at a stage of development where you should use it! Solutions ‘On the Market’:
-
-  - ▶ PPLs for conditioning GPs on function value data (e.g. Rasmussen and Nickisch, 2010; Matthews et al., 2017)
-  - ▶ Rainforth (2017, Chapter 11) and Ouyang et al. (2016); Kandasamy et al. (2018), who provided a high-level PPL for Bayesian SED.
-  - ▶ For numerics, the ProbNum Python library (ProbNum, 2021)!
-  - ▶ Paleyes et al. (2019) developed a PPL called Emukit, in which computer model emulation, Bayesian optimisation, and a number of probabilistic numerical methods are automated.
-  
-- **Thank you for your attention!**
-:::
+Other packages (e.g. `GPJax`, `GPyTorch`, `GPFlow`) have limited approaches for operators applied to GPs. Implementations of SED is typically built upon these base objects. In this sense, these packages
 :::
 
+3. Future of `GaussED` development
 
-## References
+Everything is being rebuilt from the ground up in `JAX`.
 
-:::{.unmarked}
-- **Kandasamy, K., Neiswanger, W., Zhang, R., Krishnamurthy, A., Schneider, J., and Poczos, B.** (2018). Myopic Bayesian design of experiments via posterior sampling and probabilistic programming. *arXiv:1805.09964.*
-- **Matthews, A. G. d. G., Van Der Wilk, M., Nickson, T., Fujii, K., Boukouvalas, A., León-Villagrá, P., Ghahramani, Z., and Hensman, J.** (2017). GPflow: A Gaussian process library using tensorflow. Journal of Machine Learning Research, 18(40):1–6.
-- **Ouyang, L., Tessler, M. H., Ly, D., and Goodman, N.** (2016). Practical optimal experiment design with probabilistic programs. *arXiv:1608.05046.*
-- **Paleyes, A., Pullin, M., Mahsereci, M., Lawrence, N., and González, J.** (2019). Emulation of physical processes with Emukit. In *Proceedings of the 2nd Workshop on Machine Learning and the Physical Sciences, NeurIPS*.
-- **ProbNum** (2021). ProbNum: Learn to approximate. Approximate to learn. www.probabilistic-numerics.org.
-- **Rainforth, T. W. G.** (2017). Automating inference, learning, and design using probabilistic programming. PhD thesis, University of Oxford.
-- **Rasmussen, C. E. and Nickisch, H.** (2010). Gaussian processes for machine learning (GPML) toolbox. *The Journal of Machine Learning Research*, 11:3011–3015.
-- **Solin, A. and Särkkä, S.** (2019). Hilbert space methods for reduced-rank Gaussian process regression. *Statistics and Computing*, 30(2):419–446
-:::

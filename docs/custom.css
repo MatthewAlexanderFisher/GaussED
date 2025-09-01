@@ -338,3 +338,51 @@
   text-indent: 0;         /* no negative indent tricks needed */
   display: list-item;
 }
+
+
+
+/* Right-aligned, blue aside */
+.reveal .aside-right {
+  color: var(--accent-blue);
+  width: 100%;
+  margin: 0.25rem 0;
+  /* If you want the block itself to hug the right side visually: */
+  /* max-width: 70%; margin-left: auto; */
+}
+
+/* Force alignment on common children (wins over theme defaults) */
+.reveal .aside-left,
+.reveal .aside-left p,
+.reveal .aside-left ul,
+.reveal .aside-left ol,
+.reveal .aside-left li {
+  text-align: left !important;
+}
+
+/* Optional: markerless variant when you add .unmarked */
+.reveal .aside-left.unmarked ul,
+.reveal .aside-left.unmarked ol,
+.reveal .aside-left.unmarked ul li,
+.reveal .aside-left.unmarked ol li {
+  list-style: none !important;
+  padding-left: 0 !important;
+  margin-right: 0 !important;
+}
+.reveal .aside-left.unmarked li::marker,
+.reveal .aside-left.unmarked li::before { content: "" !important; }
+
+/* Keep nice wrapping even without markers */
+.reveal .aside-left.unmarked li {
+  padding-left: 0.9em;   /* indent on the right */
+  text-indent: 0;         /* no negative indent tricks needed */
+  display: list-item;
+}
+
+/* Right-aligned, blue aside */
+.reveal .aside-left {
+  color: var(--accent-blue);
+  width: 100%;
+  margin: 0.25rem 0;
+  /* If you want the block itself to hug the right side visually: */
+  /* max-width: 70%; margin-left: auto; */
+}
