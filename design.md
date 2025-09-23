@@ -85,7 +85,7 @@ GP(
 )
 ```
 
-* **`event_shape`**: shape of the GP output, e.g. `(d1, d2, ...)`.
+* **`output_shape`**: shape of the GP output, e.g. `(d1, d2, ...)`.
 * **`batch_shape`**: broadcasting dimensions, e.g. `(B, d1, d2, ...)`.
 
 This modular design makes it possible to extend GPs with new operators, domains, or codomains without altering inference logic.
@@ -150,7 +150,6 @@ At the **user level**, the API remains simple:
 
 ## Future Directions
 
-* Extension to **multi-output GPs** with structured inter-output kernels.
 * Advanced acquisition functions for **Bayesian optimal experimental design**.
 * Improved linear solvers (e.g. multi-grid methods).
 * Integration with probabilistic programming frameworks for end-to-end workflows.

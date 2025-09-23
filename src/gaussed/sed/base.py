@@ -180,7 +180,7 @@ def _std_normal_cdf(z: Array) -> Array:
 # -------- EI --------
 @jax.tree_util.register_pytree_node_class
 @dataclass
-class ExpectedImprovement(Acquisition):
+class ExpectedImprovement:
     xi: Array = field(default_factory=lambda: jnp.array(0.0))
 
     def __call__(self, X: Array, posterior: PosteriorState, ctx: AcqContext) -> Array:
