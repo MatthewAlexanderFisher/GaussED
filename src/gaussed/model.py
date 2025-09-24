@@ -28,7 +28,7 @@ class GPModel:
 
     def condition(self, F: ProbeLike, y: Array, *, backend: Optional["Backend"]=None) -> "PosteriorGP":
         be  = backend or self.gp.backend
-        ks, ms, ctx = be.make_specs(self)
+        ks_or_phi, ms, ctx = be.make_specs(self)
         rep = be.make_rep(self)
         Fst = as_stack(F)
 
@@ -42,7 +42,7 @@ class GPModel:
         rhs   = pack_vec(y_raw - mF_raw, out_shape)                 # (nF*L, 1)
 
         # training Gram via your constructor (already flattened)
-        K_FF  = rep.linop_constructor(ks, Fst, Fst, ctx)            # (nF*L, nF*L)
+        K_FF  = rep.linop_constructor(ks_or_phi, Fst, Fst, ctx)  # (nF*L, nF*L)
         A     = self.likelihood.add_to_gram(K_FF)
         solver = LinearSolver(A, be.solverfns, be.solver_state)
 

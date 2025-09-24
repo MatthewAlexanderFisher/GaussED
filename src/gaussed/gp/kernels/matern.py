@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Tuple, Callable, Protocol
 import jax, jax.numpy as jnp
 from jax import Array
+from jax.scipy.special import gamma
 
 from gaussed.domains.base import Domain
 from gaussed.utils.constraints import Positive, Transform
@@ -84,6 +85,39 @@ class MaternKernel:
     def get_transformed_params(self):
         return (self.lengthscale_transform.forward(self.params.lengthscale),
                 self.amplitude_transform.forward(self.params.amplitude))
+
+
+    def spectral_density_1d(self, omega: Array) -> Array:
+        r"""
+        Spectral density :math:`S(\omega)` of the 1D Matérn kernel under the
+        angular-frequency convention
+            S(\omega) = ∫ k(τ) e^{-i ω τ} dτ,   k(τ) = (1/2π) ∫ S(ω) e^{i ω τ} dω.
+
+        Matérn kernel (variance σ², lengthscale ℓ, smoothness ν):
+            k(τ) = σ² · 2^{1-ν}/Γ(ν) · ( √{2ν} |τ| / ℓ )^{ν} K_{ν}( √{2ν} |τ| / ℓ ).
+
+        Its 1D spectral density is
+            S(ω) = σ² · 2√π · Γ(ν + 1/2) / Γ(ν) · κ^{2ν} · (κ² + ω²)^{-(ν + 1/2)},
+        where κ = √(2ν)/ℓ and ω is the angular frequency.
+
+        Args:
+            omega: Array of angular frequencies ω (radians per unit).
+
+        Returns:
+            Array broadcasting over ``omega`` and any batch dimensions of the parameters.
+        """
+        # Transformed, positive params
+        lengthscale, amplitude, = self.get_transformed_params()  # ℓ > 0, σ² > 0
+        nu = getattr(self.params, "nu")    # ν is static (float)
+
+        kappa = jnp.sqrt(2.0 * nu) / lengthscale                # κ = √(2ν)/ℓ
+        const = (
+            amplitude                                          # σ²
+            * 2.0 * jnp.sqrt(jnp.pi)
+            * gamma(nu + 0.5) / gamma(nu)
+            * (kappa ** (2.0 * nu))
+        )
+        return const * (kappa**2 + omega**2) ** (-(nu + 0.5))
 
     # pytree plumbing
     def tree_flatten(self):

@@ -14,9 +14,8 @@ class KernelRep:
     _kernel_spec: KernelSpec
     _mean_spec: FunSpec
     ctx: OpContext
-    linop_constructor: LinOpConstructor = field(default_factory=DenseGramConstructor)  # default mv; swap to DenseGramConstructor if you like
+    linop_constructor: LinOpConstructor = field(default_factory=DenseGramConstructor)  
 
-    # read-only properties to satisfy CovRep
     @property
     def kernel_spec(self) -> KernelSpec:
         return self._kernel_spec

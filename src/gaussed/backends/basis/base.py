@@ -1,13 +1,21 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Tuple, Callable, Protocol
+from typing import Tuple, Callable, Protocol, Optional
+
+from jax import Array
+import jax
+import jax.numpy as jnp
 
 from gaussed.types import ProbeLike
-# from gaussed.gp.gp_ops.probe import ProbeStack, as_stack
+from gaussed.gp.gp_ops.base import KernelSpec, FunSpec
 
+class Basis(Protocol):
+    @property
+    def kernel_spec(self) -> KernelSpec: ...
+    @property
+    def mean_spec(self) -> FunSpec: ...
+    @property
+    def phi_spec(self) -> FunSpec: ...
+    @property
+    def Lambda(self) -> Array: ...  # (m,), (m,m), or scalar
 
-@dataclass
-class BasisMap(Protocol):
-    """Return design Φ_F for a probe F (n×m). Can be dense or LinearOp."""
-    def design(self, F: ProbeLike) -> ProbeLike: ...
-    # use as_stack method to coerce Array/Probe into ProbeStack

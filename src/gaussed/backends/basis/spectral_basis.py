@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Any, Union
+from typing import Callable, Optional, Tuple, Any, Union, Protocol
 from functools import partial
 import jax
 from jax import Array
@@ -9,6 +9,30 @@ import jax.scipy.sparse.linalg as jsla
 from jax.experimental import sparse
 import math
 
+from gaussed.gp.kernels.base import Kernel
+
+
+# Optional protocol for typing only (no runtime dependency)
+class HasSpectral(Protocol):
+    def spectral_eig(self, omega: Array) -> Array: ...
+
+SpectralLike = Union[Callable[[Array], Array], HasSpectral]
+
+def _resolve_S_omega(spectral: SpectralLike) -> Callable[[Array], Array]:
+    """Return a JAX-callable S(omega) from either a callable or an object with .spectral_eig/.spectral_density."""
+    # If it's already a plain callable, use it
+    if callable(spectral) and not hasattr(spectral, "spectral_density_1d"):
+        return spectral  # type: ignore[arg-type]
+
+    # Otherwise, try to pull a method off the object
+    fn = getattr(spectral, "spectral_density_1d", None)
+
+    if fn is None:
+        raise TypeError(
+            "Spectral provider must be either a callable S(omega) or an "
+            "object with .spectral_eig(omega) (or .spectral_density)."
+        )
+    return fn
 
 @dataclass
 class LaplaceBasis:
@@ -96,6 +120,38 @@ class LaplaceBasis:
             
         return amplitude * phi
 
+    def lambd(self, m_per_dim: int, spectral: SpectralLike, *, radial: bool = True) -> Array:
+        """
+        Build spectral weights D_j for the Laplace basis.
+        `spectral`: callable S(omega) OR object with .spectral_eig(omega) (or .spectral_density).
+        If `radial=True`, ω_j = sqrt(∑_d (i_d b_d)^2); correct for isotropic kernels (RBF/Matérn).
+        """
+        S = _resolve_S_omega(spectral)  # S: (ω,) -> (D,)
+
+        # Active dims & their b's
+        if self._full_dims:
+            b = self._b              # (D,)
+            d_sel = self.dim
+        else:
+            idx = jnp.array(self._dims)
+            b = self._b[idx]         # (d_sel,)
+            d_sel = b.shape[0]
+
+        # Multi-index J over {1..m_per_dim}^d_sel: shape (d_sel, m_total)
+        J = self._multi_index(d_sel, m_per_dim)
+
+        if radial:
+            # ω_j = || i ∘ b ||_2
+            omega = jnp.sqrt(jnp.sum((J * b[:, None])**2, axis=0))  # (m_total,)
+            return S(omega)                                         # (m_total,)
+        else:
+            # If you need separable/product spectra, you can add a second callable S1d and do:
+            # omega_per_dim = J * b[:, None]                          # (d_sel, m_total)
+            # return jnp.prod(jax.vmap(S1d)(omega_per_dim), axis=0)
+            raise NotImplementedError("Non-radial/separable spectrum not implemented; set radial=True or add S1d.")
+
+
+
     def evaluate_with_coeff(self, F: Any, coeff: Array, m_per_dim: int = 8) -> Array:
         """
         Efficiently evaluate f(x) = Σ_j c_j φ_j(x) without materializing the full basis.
@@ -173,21 +229,6 @@ class LaplaceBasis:
         
         return result
 
-    def linear_operator(self, x: Array, m_per_dim: int = 8, 
-                        diag: Optional[Array] = None) -> 'LaplaceBasisOperator':
-        """
-        Create a linear operator representing Φ^T D Φ where D is diagonal.
-        This is useful for GP operations without materializing the full matrix.
-        
-        Args:
-            x: Input points of shape (n, D)
-            m_per_dim: Number of basis functions per dimension
-            diag: Optional diagonal matrix D of shape (n,). If None, uses identity.
-        
-        Returns:
-            LaplaceBasisOperator that computes matrix-vector products lazily
-        """
-        return LaplaceBasisOperator(self, x, m_per_dim, diag)
 
     def set_domain(self, domain: Array) -> 'LaplaceBasis':
         """
@@ -215,166 +256,6 @@ class LaplaceBasis:
             a=self.a
         )
 
-
-class LaplaceBasisOperator:
-    """
-    Linear operator representing Φ^T D Φ for efficient matrix-vector products.
-    Useful for GP operations like computing (Φ^T D Φ + λI)^{-1} v without materializing.
-    """
-    
-    def __init__(self, basis: LaplaceBasis, x: Array, m_per_dim: int = 8, 
-                 diag: Optional[Array] = None):
-        self.basis = basis
-        self.x = x
-        self.m_per_dim = m_per_dim
-        self.n = x.shape[0]
-        
-        # Determine effective dimension
-        if basis._full_dims:
-            self.effective_dim = basis.dim
-        else:
-            self.effective_dim = len(basis._dims)
-        
-        self.m_total = m_per_dim ** self.effective_dim
-        self.shape = (self.m_total, self.m_total)
-        
-        # Store diagonal weights
-        self.diag = diag if diag is not None else jnp.ones(self.n)
-        
-        # Precompute basis matrix if small enough
-        self._phi_cached = None
-        self._cache_threshold = 10000  # Cache if n * m_total < threshold
-        
-        if self.n * self.m_total < self._cache_threshold:
-            self._phi_cached = basis(x, m_per_dim)
-    
-    def _get_phi(self) -> Array:
-        """Get basis matrix, using cache if available."""
-        if self._phi_cached is not None:
-            return self._phi_cached
-        return self.basis(self.x, self.m_per_dim)
-    
-    def matvec(self, v: Array) -> Array:
-        """
-        Compute (Φ^T D Φ) v efficiently.
-        
-        Args:
-            v: Vector of shape (m_total,) or (m_total, k)
-        
-        Returns:
-            Result of shape (m_total,) or (m_total, k)
-        """
-        if v.shape[0] != self.m_total:
-            raise ValueError(f"Vector has shape {v.shape}, expected first dim {self.m_total}")
-        
-        # Two-step computation: Φv, then Φ^T(D(Φv))
-        # Step 1: Φv - use evaluate_with_coeff for efficiency
-        phi_v = self.basis.evaluate_with_coeff(self.x, v, self.m_per_dim)
-        
-        # Step 2: Apply diagonal weights
-        if v.ndim == 1:
-            weighted = self.diag * phi_v
-        else:
-            weighted = self.diag[:, None] * phi_v
-        
-        # Step 3: Φ^T weighted - this requires the basis matrix
-        phi = self._get_phi()
-        result = phi.T @ weighted
-        
-        return result
-    
-    def matmul(self, B: Array) -> Array:
-        """
-        Compute (Φ^T D Φ) B for matrix B.
-        
-        Args:
-            B: Matrix of shape (m_total, k)
-        
-        Returns:
-            Result of shape (m_total, k)
-        """
-        if B.ndim == 1:
-            return self.matvec(B)
-        
-        # Apply matvec to each column
-        return jnp.stack([self.matvec(B[:, i]) for i in range(B.shape[1])], axis=1)
-    
-    def to_dense(self) -> Array:
-        """
-        Materialize the full (Φ^T D Φ) matrix.
-        Warning: This can be memory intensive for large basis sizes!
-        
-        Returns:
-            Dense matrix of shape (m_total, m_total)
-        """
-        phi = self._get_phi()  # (n, m_total)
-        weighted_phi = self.diag[:, None] * phi  # (n, m_total)
-        return phi.T @ weighted_phi  # (m_total, m_total)
-    
-    def add_diagonal(self, lam: float) -> 'LaplaceBasisOperator':
-        """
-        Create a new operator representing (Φ^T D Φ + λI).
-        
-        Args:
-            lam: Scalar to add to diagonal
-        
-        Returns:
-            New operator with modified diagonal
-        """
-        # We'll handle this by modifying matvec
-        new_op = LaplaceBasisOperator(self.basis, self.x, self.m_per_dim, self.diag)
-        new_op._lambda = lam
-        
-        # Override matvec to include diagonal term
-        original_matvec = new_op.matvec
-        
-        def matvec_with_diag(v):
-            return original_matvec(v) + lam * v
-        
-        new_op.matvec = matvec_with_diag
-        return new_op
-    
-    def solve(self, b: Array, lam: float = 1e-6, method: str = 'cg') -> Array:
-        """
-        Solve (Φ^T D Φ + λI) x = b using iterative methods.
-        
-        Args:
-            b: Right-hand side vector of shape (m_total,) or (m_total, k)
-            lam: Regularization parameter (added to diagonal)
-            method: Solver method ('cg' for conjugate gradient, 'gmres' for GMRES)
-        
-        Returns:
-            Solution x of shape (m_total,) or (m_total, k)
-        """
-        # Create regularized operator
-        A_reg = self.add_diagonal(lam)
-        
-        if b.ndim == 1:
-            # Single right-hand side
-            if method == 'cg':
-                # Use conjugate gradient (assumes positive definite)
-                x, info = jsla.cg(A_reg.matvec, b)
-                if info != 0:
-                    print(f"CG did not converge (info={info})")
-            elif method == 'gmres':
-                # Use GMRES (more general)
-                x, info = jsla.gmres(A_reg.matvec, b)
-                if info != 0:
-                    print(f"GMRES did not converge (info={info})")
-            else:
-                raise ValueError(f"Unknown method: {method}")
-            return x
-        else:
-            # Multiple right-hand sides
-            solutions = []
-            for i in range(b.shape[1]):
-                solutions.append(self.solve(b[:, i], lam, method))
-            return jnp.stack(solutions, axis=1)
-    
-    def __repr__(self):
-        return (f"LaplaceBasisOperator(shape={self.shape}, "
-                f"n={self.n}, m_per_dim={self.m_per_dim}, "
-                f"cached={self._phi_cached is not None})")
 
 
 # Helper function for derivative basis functions

@@ -15,7 +15,7 @@ from gaussed.gp.gp_ops.probe import Probe, ProbeStack, as_stack
 from gaussed.backends.base import Backend
 from gaussed.types import ProbeLike
 from gaussed.gp.gp_ops.base import FunSpec, KernelSpec
-from gaussed.utils.make_specs import make_fun_spec, make_kernel_spec
+from gaussed.utils.make_specs import make_mean_spec, make_kernel_spec
 from gaussed.backends.reps.base import CovRep
 from gaussed.backends.solvers.linear_solver import LinearSolver
 from gaussed.linops.linop import LinearOp, AsLinearOp, materialise_dense
@@ -40,7 +40,7 @@ class GP:
 
     # Bridge to specs
     def mean_spec(self) -> "FunSpec":
-        return make_fun_spec(self.mean, self.domain, self.codomain)
+        return make_mean_spec(self.mean, self.domain, self.codomain)
 
     def kernel_spec(self) -> "KernelSpec":
         return make_kernel_spec(self.kernel, self.domain, self.codomain)

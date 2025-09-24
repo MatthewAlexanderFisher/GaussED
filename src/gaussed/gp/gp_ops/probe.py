@@ -1,11 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Protocol, Optional, Tuple, Callable, Literal, Any
+from typing import Union, Optional, Tuple, Callable, Literal, Any
 from jax import Array
 import jax.numpy as jnp
 import jax
 
-from gaussed.gp.gp_ops.base import Operator, Functional, OpContext, FunSpec, KernelSpec
+from gaussed.gp.gp_ops.base import Operator, Functional, OpContext, FunSpec, KernelSpec, BasisSpec
 from gaussed.types import ProbeLike
 from gaussed.utils.shape_helpers import _ensure_n_by_d
 
@@ -46,14 +46,11 @@ class Probe:
 class ProbeStack:
     probes: Tuple[Probe, ...]  # (P,)
 
-    # Unary: concatenate rows from each probe's realisation
     def apply(self, f: FunSpec, ctx: OpContext) -> Array:
         if not self.probes:
             raise ValueError("ProbeStack.apply_all: empty probe stack.")
         chunks: Tuple[Array, ...] = tuple(p.apply(f, ctx) for p in self.probes)
-        if len(chunks) == 1:
-            return chunks[0]
-        return jnp.concatenate(chunks, axis=0)
+        return chunks[0] if len(chunks) == 1 else jnp.concatenate(chunks, axis=0)
 
     def kernel(self, other: "ProbeStack", ks: KernelSpec, ctx: OpContext) -> Array:
         if not self.probes or not other.probes:
@@ -61,7 +58,6 @@ class ProbeStack:
 
         ks_left: Tuple[KernelSpec, ...] = tuple(_lift_left_all(p.ops, ks, ctx) for p in self.probes)
 
-        # Build each row (concatenate blocks horizontally)
         row_mats: Tuple[Array, ...] = tuple(
             _concat_row_blocks(tuple(
                 self.probes[i].fnl.pair(
@@ -73,14 +69,20 @@ class ProbeStack:
             ))
             for i in range(len(self.probes))
         )
+        return row_mats[0] if len(row_mats) == 1 else jnp.concatenate(row_mats, axis=0)
 
-        if len(row_mats) == 1:
-            return row_mats[0]
-        return jnp.concatenate(row_mats, axis=0)
-
-    # Convenience for self-self blocks
     def gram(self, ks: KernelSpec, ctx: OpContext) -> Array:
         return self.kernel(self, ks, ctx)
+
+    # probe-index slicing (for CoLa) 
+    def substack(self, i0: int, i1: int) -> "ProbeStack":
+        return ProbeStack(self.probes[i0:i1])
+
+    def __getitem__(self, slc) -> "ProbeStack":
+        # convenient alias; supports stack[:], stack[i:j]
+        if isinstance(slc, slice):
+            return ProbeStack(self.probes[slc])
+        raise TypeError("ProbeStack only supports slicing by a slice object.")
 
     def tree_flatten(self):
         return ((self.probes,), ())
@@ -89,6 +91,7 @@ class ProbeStack:
     def tree_unflatten(cls, aux, ch):
         (probes,) = ch
         return cls(probes)
+
 
 
 # ---------- helpers (pure; jit-friendly) ----------

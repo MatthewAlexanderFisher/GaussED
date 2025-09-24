@@ -1,181 +1,355 @@
-from jax import Array
-import jax.numpy as jnp
+"""
+Shape manipulation utilities for tensor operations in Gaussian process computations.
+
+This module provides utilities for reshaping and manipulating tensors, particularly
+for kernel matrices and vectors with event dimensions.
+"""
+
 from typing import Tuple
 import math
+import jax.numpy as jnp
+from jax import Array
 
 
-# Most important shape helper!
-def canonicalise_K_axes(K, L_shape, R_shape):
-    """Reorder (nF, nG, *L, *R) -> (nF, *L, nG, *R)."""
-    nF, nG = int(K.shape[0]), int(K.shape[1])
-    lrank, rrank = len(L_shape), len(R_shape)
-    # sanity
-    assert K.ndim == 2 + lrank + rrank, f"{K.shape} vs l={lrank}, r={rrank}"
-    if lrank == 0 and rrank == 0:
-        return K  # already (nF, nG)
-    row_axes = (0,) + tuple(range(2, 2 + lrank))                        # nF, *L
-    col_axes = (1,) + tuple(range(2 + lrank, 2 + lrank + rrank))        # nG, *R
-    return jnp.transpose(K, row_axes + col_axes)
+# ============================================================================
+# Basic Shape Operations
+# ============================================================================
+
+def prod(shape: Tuple[int, ...]) -> int:
+    """Compute product of shape tuple elements. Returns 1 for empty tuple."""
+    return math.prod(shape) if shape else 1
 
 
+def ensure_2d_column(x: Array) -> Array:
+    """Ensure array is 2D column vector: (n,) -> (n, 1)."""
+    x = jnp.asarray(x)
+    return x.reshape(-1, 1) if x.ndim == 1 else x
+
+
+def ensure_2d_rows(Y: Array) -> Array:
+    """Reshape (..., Q) -> (N, Q) where N is product of leading dims."""
+    return Y.reshape((-1, Y.shape[-1]))
+
+
+def ensure_n_by_shape(X: Array, item_shape: Tuple[int, ...]) -> Array:
+    """
+    Coerce X to shape (n, *item_shape).
+    
+    Args:
+        X: Input array
+        item_shape: Desired shape for each item
+        
+    Returns:
+        Array with shape (n, *item_shape)
+        
+    Accepts:
+        - (n, *item_shape): returns as-is
+        - (*item_shape,): treated as n=1, returns (1, *item_shape)
+        - (n,) when item_shape=(1,): returns (n, 1)
+    """
+    X = jnp.asarray(X)
+    
+    # Single item case: (*item_shape,) -> (1, *item_shape)
+    if X.ndim == len(item_shape):
+        return X.reshape((1, *item_shape))
+    
+    # Common scalar case: (n,) -> (n, 1)
+    if X.ndim == 1 and item_shape == (1,):
+        return X.reshape((-1, 1))
+    
+    # Already correct shape
+    if X.ndim == 1 + len(item_shape) and X.shape[1:] == item_shape:
+        return X
+    
+    raise ValueError(f"Expected (n, {item_shape}), got {X.shape}")
+
+
+# ============================================================================
+# Axis Manipulation
+# ============================================================================
 
 def move_front_axis(a: Array, dst: int) -> Array:
-    """Move leading axis 0 to position `dst` (0 <= dst <= a.ndim-1). Used to transform TensorKernels"""
+    """
+    Move leading axis to position `dst`.
+    
+    Args:
+        a: Input array
+        dst: Destination position (0 <= dst < a.ndim)
+        
+    Returns:
+        Array with axis 0 moved to position dst
+    """
     nd = a.ndim
-    assert 0 <= dst < nd
+    assert 0 <= dst < nd, f"Invalid destination {dst} for {nd}D array"
     perm = [*range(1, dst + 1), 0, *range(dst + 1, nd)]
     return jnp.transpose(a, perm)
 
 
-def _ensure_n_by_d(x: Array) -> Array:
-    x = jnp.asarray(x)
-    return x.reshape(-1, 1) if x.ndim == 1 else x  # (n,) -> (n,1)
+def canonicalise_kernel_axes(K: Array, 
+                            L_shape: Tuple[int, ...], 
+                            R_shape: Tuple[int, ...]) -> Array:
+    """
+    Reorder kernel axes from (nF, nG, *L, *R) to (nF, *L, nG, *R).
+    
+    This is useful for tensor kernels where we want to group row indices
+    together and column indices together.
+    
+    Args:
+        K: Kernel array with shape (nF, nG, *L, *R)
+        L_shape: Left event shape
+        R_shape: Right event shape
+        
+    Returns:
+        Reordered array with shape (nF, *L, nG, *R)
+    """
+    nF, nG = int(K.shape[0]), int(K.shape[1])
+    lrank, rrank = len(L_shape), len(R_shape)
+    
+    # Validate input
+    expected_ndim = 2 + lrank + rrank
+    assert K.ndim == expected_ndim, \
+        f"Expected {expected_ndim}D array, got {K.ndim}D with shape {K.shape}"
+    
+    # No reordering needed for scalar kernels
+    if lrank == 0 and rrank == 0:
+        return K
+    
+    # Compute new axis order
+    row_axes = (0,) + tuple(range(2, 2 + lrank))                  # (nF, *L)
+    col_axes = (1,) + tuple(range(2 + lrank, 2 + lrank + rrank))  # (nG, *R)
+    
+    return jnp.transpose(K, row_axes + col_axes)
 
-def _prod(shape: Tuple[int, ...]) -> int:
-    # Pure-Python; safe under jit/grad
-    return math.prod(shape) if shape else 1
 
-def _append(shape: Tuple[int, ...], *more: int) -> Tuple[int, ...]:
-    return tuple(shape) + tuple(more)
+# ============================================================================
+# Kernel Matrix Operations
+# ============================================================================
 
-def _append_full(shape: Tuple[int, ...], tail: Tuple[int, ...]) -> Tuple[int, ...]:
-    return (*shape, *tail)
-
-def _append_flat(shape: Tuple[int, ...], in_shape: Tuple[int, ...]) -> Tuple[int, ...]:
-    return (*shape, _prod(in_shape))
-
-
-def ensure_n_by_shape(X: Array, item_shape: Tuple[int, ...]) -> Array:
-    """Coerce X to (n, *item_shape). Accepts (n, *item_shape) or (*item_shape,) (n=1)."""
-    X = jnp.asarray(X)
-    if X.ndim == len(item_shape):         # e.g. (*item_shape,) -> (1,*item_shape)
-        return X.reshape((1, *item_shape))
-    if X.ndim == 1 and item_shape == (1,):  # common scalar case
-        return X.reshape((-1, 1))
-    # allow already-correct (n,*item_shape)
-    if X.ndim == 1 + len(item_shape) and X.shape[1:] == item_shape:
-        return X
-    raise ValueError(f"Expected (n,{item_shape}) got {X.shape}")
-
-
-def _enforce_event_shape(
-    K: Array,
-    n_x: int,
-    n_y: int,
-    left_shape: Tuple[int, ...],
-    right_shape: Tuple[int, ...],
-) -> Array:
-    """Return K with shape (n_x, n_y, *left_shape, *right_shape)."""
+def enforce_kernel_shape(K: Array,
+                        n_x: int,
+                        n_y: int,
+                        left_shape: Tuple[int, ...],
+                        right_shape: Tuple[int, ...]) -> Array:
+    """
+    Ensure kernel has shape (n_x, n_y, *left_shape, *right_shape).
+    
+    Handles common edge cases like scalar outputs and single evaluations.
+    
+    Args:
+        K: Kernel evaluation result
+        n_x: Number of x points
+        n_y: Number of y points
+        left_shape: Left event shape
+        right_shape: Right event shape
+        
+    Returns:
+        Kernel with correct shape
+    """
     K = jnp.asarray(K)
     want_nd = 2 + len(left_shape) + len(right_shape)
-
+    
+    # Already correct
     if K.ndim == want_nd:
-        # Best case: already has the exact shape.
         return K
-
-    # Common cases to fix up:
-
-    # (i) Scalar output batched correctly: (n_x, n_y) with empty event shapes.
-    if K.ndim == 2 and len(left_shape) == 0 and len(right_shape) == 0:
+    
+    # Case 1: Scalar kernel with correct batch dims
+    if K.ndim == 2 and not left_shape and not right_shape:
         return K
-
-    # (ii) Scalar pair result for a single (x,y): () → (1,1)
-    if K.ndim == 0 and n_x == 1 and n_y == 1 and len(left_shape) == 0 and len(right_shape) == 0:
+    
+    # Case 2: Single evaluation, scalar output: () → (1, 1)
+    if K.ndim == 0 and n_x == 1 and n_y == 1 and not left_shape and not right_shape:
         return K.reshape(1, 1)
-
-    # (iii) Single (x,y) tensor-valued result: (*L, *R) → (1,1,*L,*R)
+    
+    # Case 3: Single evaluation, tensor output: (*L, *R) → (1, 1, *L, *R)
     if K.shape == (*left_shape, *right_shape) and n_x == 1 and n_y == 1:
         return K.reshape((1, 1, *left_shape, *right_shape))
-
-    # (iv) Pairwise batched but one of the event dims squeezed accidentally:
-    # Try to reshape if total size matches.
-    size_ok = K.size == (n_x * n_y * (jnp.prod(jnp.array(left_shape)) or 1) * (jnp.prod(jnp.array(right_shape)) or 1))
-    if size_ok:
+    
+    # Case 4: Try reshaping if total size matches
+    expected_size = n_x * n_y * prod(left_shape) * prod(right_shape)
+    if K.size == expected_size:
         return K.reshape((n_x, n_y, *left_shape, *right_shape))
-
-    # If we’re here, something is wrong upstream (wrong batching or wrong event dims).
+    
+    # Shape mismatch
     raise ValueError(
-        f"KernelSpec: got K.shape={K.shape}, expected "
-        f"(n_x, n_y, *left_shape, *right_shape)=({n_x},{n_y},{left_shape},{right_shape})"
+        f"Cannot reshape kernel from {K.shape} to "
+        f"({n_x}, {n_y}, {left_shape}, {right_shape})"
     )
 
 
-def _flatten_for_solver(K: Array) -> Array:
-    # K: (n_x, n_y, *L, *R)  or  (n_x, n_y)
-    if K.ndim == 2:  # scalar-output
+def flatten_kernel_for_solver(K: Array) -> Array:
+    """
+    Flatten kernel for linear solvers: (n_x, n_y, *L, *R) -> (n_x*|L|, n_y*|R|).
+    
+    Args:
+        K: Kernel array with event dimensions
+        
+    Returns:
+        Flattened kernel matrix suitable for linear algebra operations
+    """
+    if K.ndim == 2:  # Already flat (scalar kernel)
         return K
+    
     n_x, n_y = K.shape[:2]
-    ex = K.shape[2:2 + (K.ndim - 2)//2]
-    ey = K.shape[2 + (K.ndim - 2)//2:]
-    K4 = K.reshape(n_x, n_y, int(jnp.prod(jnp.array(ex) or jnp.array([1]))),
-                            int(jnp.prod(jnp.array(ey) or jnp.array([1]))))
-    K4 = jnp.transpose(K4, (0, 2, 1, 3))
-    return K4.reshape(n_x * K4.shape[1], n_y * K4.shape[3])
+    mid = (K.ndim - 2) // 2
+    left_dims = K.shape[2:2 + mid]
+    right_dims = K.shape[2 + mid:]
+    
+    # Reshape to separate event dimensions
+    left_size = prod(left_dims) if left_dims else 1
+    right_size = prod(right_dims) if right_dims else 1
+    K_reshaped = K.reshape(n_x, n_y, left_size, right_size)
+    
+    # Transpose and flatten
+    K_transposed = jnp.transpose(K_reshaped, (0, 2, 1, 3))
+    return K_transposed.reshape(n_x * left_size, n_y * right_size)
 
-# Pack event dimensions into a matrix (used to coerce LinOp format)
-def pack_ev2mat(K: Array,
-                left_shape: Tuple[int, ...],
-                right_shape: Tuple[int, ...]) -> Array:
-    """(n_x, n_y, *L, *R) -> (n_x*|L|, n_y*|R|)"""
+
+# ============================================================================
+# Packing and Unpacking Operations
+# ============================================================================
+
+def pack_kernel_to_matrix(K: Array,
+                         left_shape: Tuple[int, ...],
+                         right_shape: Tuple[int, ...]) -> Array:
+    """
+    Pack kernel with event dims to matrix: (n_x, n_y, *L, *R) -> (n_x*|L|, n_y*|R|).
+    
+    Args:
+        K: Kernel array
+        left_shape: Left event shape
+        right_shape: Right event shape
+        
+    Returns:
+        Packed matrix
+    """
     n_x, n_y = K.shape[:2]
-    return K.reshape(n_x * _prod(left_shape), n_y * _prod(right_shape))
+    return K.reshape(n_x * prod(left_shape), n_y * prod(right_shape))
 
-def unpack_mat2ev(M: Array,
-                  n_x: int, n_y: int,
-                  left_shape: Tuple[int, ...],
-                  right_shape: Tuple[int, ...]) -> Array:
-    """(n_x*|L|, n_y*|R|) -> (n_x, n_y, *L, *R)"""
+
+def unpack_matrix_to_kernel(M: Array,
+                           n_x: int, 
+                           n_y: int,
+                           left_shape: Tuple[int, ...],
+                           right_shape: Tuple[int, ...]) -> Array:
+    """
+    Unpack matrix to kernel: (n_x*|L|, n_y*|R|) -> (n_x, n_y, *L, *R).
+    
+    Args:
+        M: Packed matrix
+        n_x: Number of x points
+        n_y: Number of y points
+        left_shape: Left event shape
+        right_shape: Right event shape
+        
+    Returns:
+        Unpacked kernel with event dimensions
+    """
     return M.reshape(n_x, n_y, *left_shape, *right_shape)
 
 
-def _as_2d(V: Array):
-    return (V[:, None], True) if V.ndim == 1 else (V, False)
-
-def _ensure_2d_rows(Y: Array) -> Array:
-    # reshape (..., Q) -> (N, Q) where N is the product of leading dims
-    return Y.reshape((-1, Y.shape[-1]))
-
-def _restore(U: Array, was_vec: bool):
-    return U.squeeze(-1) if was_vec else U
-
-
-def pack_vec(v_raw: jnp.ndarray, out_shape: Tuple[int, ...]) -> Array:
-    v_raw = jnp.asarray(v_raw)
-    n = int(v_raw.shape[0])        # Python int
-    L = _prod(out_shape)           # Python int
-    return v_raw.reshape(n * L, 1)
+def pack_vector(v: Array, out_shape: Tuple[int, ...]) -> Array:
+    """
+    Pack vector with event dims: (n, *out_shape) -> (n*|out_shape|, 1).
+    
+    Args:
+        v: Input vector
+        out_shape: Event shape
+        
+    Returns:
+        Packed column vector
+    """
+    v = jnp.asarray(v)
+    n = v.shape[0]
+    return v.reshape(n * prod(out_shape), 1)
 
 
-def pack_vec_flat(v_raw: Array, out_shape: Tuple[int, ...]) -> Array:
-    """(n, *out_shape) -> (n*L,). Keep only if you really need 1-D."""
-    v_raw = jnp.asarray(v_raw)
-    n = int(v_raw.shape[0])        # Python int
-    L = _prod(out_shape) if out_shape else 1
-    return v_raw.reshape(n * L,)
+def pack_vector_flat(v: Array, out_shape: Tuple[int, ...]) -> Array:
+    """
+    Pack vector to 1D: (n, *out_shape) -> (n*|out_shape|,).
+    
+    Args:
+        v: Input vector
+        out_shape: Event shape
+        
+    Returns:
+        Flattened 1D vector
+    """
+    v = jnp.asarray(v)
+    n = v.shape[0]
+    return v.reshape(n * prod(out_shape),)
 
 
-def unpack_vec(v_flat: Array, n: int, out_shape: Tuple[int, ...]) -> Array:
-    """(n*L,) -> (n, *out_shape). Scalar-out: (n,) stays (n,)."""
+def unpack_vector(v_flat: Array, n: int, out_shape: Tuple[int, ...]) -> Array:
+    """
+    Unpack flat vector: (n*|out_shape|,) -> (n, *out_shape).
+    
+    For scalar output (empty out_shape), returns (n,).
+    
+    Args:
+        v_flat: Flattened vector
+        n: Number of data points
+        out_shape: Event shape
+        
+    Returns:
+        Unpacked vector with event dimensions
+    """
     v_flat = jnp.asarray(v_flat)
-    if not out_shape:
+    if not out_shape:  # Scalar case
         return v_flat.reshape(n,)
     return v_flat.reshape((n, *out_shape))
 
-def pack_kernel(K_raw: Array, out_shape: Tuple[int, ...]) -> Array:
-    """(nF, nG, *out_shape, *out_shape) -> (nF*L, nG*L)."""
-    nF, nG = K_raw.shape[:2]
-    L = _prod(out_shape) if out_shape else 1
-    return K_raw.reshape(nF * L, nG * L)
 
-def _flatten_kernel(K_raw: Array) -> Tuple[Array, int, Tuple[int, ...]]:
-    """(nF,nG,*out,*out) -> (nF*L, nG*L), L, out_shape"""
-    nF, nG = K_raw.shape[:2]
-    out_shape = tuple(K_raw.shape[2:])
-    L = _prod(out_shape) if out_shape else 1
-    return K_raw.reshape(nF * L, nG * L), L, out_shape
+# ============================================================================
+# Utility Functions
+# ============================================================================
 
-def _unflatten_var_diag(v_flat: Array, nG: int, out_shape: Tuple[int, ...]) -> Array:
-    """(nG*L,) -> (nG,*out) or (nG,) when scalar."""
-    if not out_shape:
-        return v_flat.reshape(nG,)
-    return v_flat.reshape((nG, *out_shape))
+def as_2d_column(v: Array) -> Tuple[Array, bool]:
+    """
+    Convert vector to 2D column, tracking if it was squeezed.
+    
+    Args:
+        v: Input vector
+        
+    Returns:
+        (2D column vector, was_squeezed flag)
+    """
+    if v.ndim == 1:
+        return v[:, None], True
+    return v, False
+
+
+def restore_from_2d(y: Array, was_squeezed: bool) -> Array:
+    """
+    Restore original shape after as_2d_column.
+    
+    Args:
+        y: 2D array
+        was_squeezed: Whether original was 1D
+        
+    Returns:
+        Array with original dimensionality
+    """
+    return y.squeeze(-1) if was_squeezed else y
+
+
+# ============================================================================
+# Legacy Aliases (for backward compatibility)
+# ============================================================================
+
+# Keep original names as aliases
+canonicalise_K_axes = canonicalise_kernel_axes
+_ensure_n_by_d = ensure_2d_column
+_ensure_2d_rows = ensure_2d_rows
+_prod = prod
+_as_2d = as_2d_column
+_restore = restore_from_2d
+_enforce_event_shape = enforce_kernel_shape
+_flatten_for_solver = flatten_kernel_for_solver
+pack_ev2mat = pack_kernel_to_matrix
+unpack_mat2ev = unpack_matrix_to_kernel
+pack_vec = pack_vector
+pack_vec_flat = pack_vector_flat
+unpack_vec = unpack_vector
+pack_kernel = pack_kernel_to_matrix
+_flatten_kernel = flatten_kernel_for_solver
+_unflatten_var_diag = unpack_vector

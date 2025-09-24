@@ -80,7 +80,7 @@ class RBFKernel:
         K = K_base.reshape((n_f, n_g, *L, *R))  # adds the (1,1) tail in scalar case
         return K
 
-    def spectral_density(self, omega: Array) -> Array:
+    def spectral_density_1d(self, omega: Array) -> Array:
         r"""
         Spectral density :math:`S(\omega)` of the 1D RBF kernel under the 
         angular-frequency convention.

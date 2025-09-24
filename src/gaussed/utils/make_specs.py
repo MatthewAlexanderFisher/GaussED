@@ -58,7 +58,7 @@ def make_kernel_spec(
     )
 
 
-def make_fun_spec(
+def make_mean_spec(
     mean: MeanFun,                   
     domain: Domain,
     codomain: Codomain
@@ -79,4 +79,18 @@ def make_fun_spec(
         integrate=ix_of,
         partial=partial,
         partial2=partial2,
+    )
+
+def make_fun_spec(
+    func: Callable[[Array], Array],
+    domain: Domain,
+    codomain: Codomain,                  
+) -> FunSpec:
+    
+    def eval(X: Array) -> Array:
+        return func(X)
+
+    return FunSpec(
+        eval=eval,
+        codomain=codomain,
     )

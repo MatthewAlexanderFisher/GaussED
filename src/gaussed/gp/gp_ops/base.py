@@ -83,6 +83,27 @@ class KernelSpec:
                    d_dx, d_dy, d2_xx, d2_yy, d2_xy)
 
 
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class BasisSpec:
+    """Lightweight container to signal 'basis mode' to constructors."""
+    phi_spec: FunSpec
+    Lambda: Array  # scalar, (m,), or (m,m)
+
+    def tree_flatten(self):
+        # Lambda is dynamic; FunSpec is static aux
+        children = (self.Lambda,)
+        aux = (self.phi_spec,)
+        return children, aux
+
+    @classmethod
+    def tree_unflatten(cls, aux, children):
+        (phi_spec,) = aux
+        (Lambda,) = children
+        return cls(phi_spec, Lambda)
+
+
+
 
 # === OpContext to pass info to operators ===========================================
 
@@ -133,19 +154,4 @@ class Functional(Protocol):
     # default pair implementation (needs to be copied to all classes following this protocol)
     def pair(self, other: "Functional", ks: KernelSpec, ctx: OpContext) -> Array: ...
 
-
-
-
-# @jax.tree_util.register_pytree_node_class
-# @dataclass(frozen=True)
-# class ShapeNeutralOp:
-#     def output_codomain(self, cod: "Codomain", dom: "Domain") -> "Codomain":
-#         return cod
-#     def map_left_shape(self, left_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]:
-#         return left_shape
-#     def map_right_shape(self, right_shape: Tuple[int, ...], dom: "Domain") -> Tuple[int, ...]:
-#         return right_shape
-#     def tree_flatten(self): return (), ()
-#     @classmethod
-#     def tree_unflatten(cls, aux, ch): return cls()
 
