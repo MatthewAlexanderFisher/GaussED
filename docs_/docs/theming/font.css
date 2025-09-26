@@ -1,0 +1,68 @@
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  src: url('fonts/AtkinsonHyperlegibleNext-Regular.woff2') format('woff2'),
+       url('fonts/AtkinsonHyperlegibleNext-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  src: url('fonts/AtkinsonHyperlegibleNext-Bold.woff2') format('woff2'),
+       url('fonts/AtkinsonHyperlegibleNext-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible Mono';
+  src: url('fonts/AtkinsonHyperlegibleMono-Regular.woff2') format('woff2'),
+       url('fonts/AtkinsonHyperlegibleMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+code, pre {
+  font-family: 'Atkinson Hyperlegible Mono', monospace;
+}
+
+body {
+  font-family: 'Atkinson Hyperlegible Next', sans-serif;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Atkinson Hyperlegible Next', sans-serif;
+  font-weight: 700;
+}
+
+/* Sidebar scrollbar — Chrome / Edge / Safari */ #quarto-sidebar::-webkit-scrollbar { width: 10px; height: 10px; } #quarto-sidebar::-webkit-scrollbar-track { background: var(--brand-bg); } #quarto-sidebar::-webkit-scrollbar-thumb { background-color: var(--brand-teal); border-radius: 6px; border: 2px solid var(--brand-bg); } #quarto-sidebar::-webkit-scrollbar-thumb:hover { background-color: var(--brand-orange); } /* Sidebar scrollbar — Firefox (and newer Chrome that honours it) */ #quarto-sidebar { scrollbar-width: thin;  /* auto | thin | none */ scrollbar-color: var(--brand-teal) var(--brand-bg); }
+
+
+@-moz-document domain("https://matthewalexanderfisher.github.io/NCL-MAS2901/") {
+    /* Insert code here... */
+}
+
+/* Chrome, Edge, Safari (WebKit/Blink) */
+::-webkit-scrollbar {
+  width: 10px;              /* thickness of vertical scrollbar */
+  height: 2px;             /* thickness of horizontal scrollbar */
+}
+
+::-webkit-scrollbar-track {
+  background: var(--brand-bg);   /* track (background) */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--brand-teal); /* main thumb */
+  border-radius: 10px;
+  border: 2px solid var(--brand-bg);   /* adds spacing between thumb and track */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--brand-orange); /* hover colour */
+}
+
+/* Firefox (and newer Chrome that supports it) */
+body {
+  scrollbar-width: thin;   /* thin | auto */
+  scrollbar-color: var(--brand-teal) var(--brand-bg);
+}

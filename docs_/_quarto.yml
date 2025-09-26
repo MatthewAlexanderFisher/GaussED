@@ -1,0 +1,41 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "GaussED Docs"
+  navbar:
+    left:
+      - text: Tutorials
+        href: examples/index.qmd
+      - text: API
+        href: api/index.html
+    right:
+      - icon: github
+        href: https://github.com/matthewalexanderfisher/gaussed
+  sidebar:
+    style: docked
+    search: true
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    number-sections: true
+    math: mathjax
+    mainfont: "Atkinson Hyperlegible Next"
+    monofont: "Atkinson Hyperlegible Mono"
+    css: 
+      - theming/styles.css  
+      - theming/font.css
+  # pdf:
+  #   mainfont: "Atkinson Hyperlegible Next"
+  #   sansfont: "Atkinson Hyperlegible Next"
+  #   monofont: "Atkinson Hyperlegible Mono"
+
+execute:
+  cache: true
+  freeze: auto
+
+# engine: jupyter
+# jupyter: "Python (JAX)"   # or the ipykernel name you created

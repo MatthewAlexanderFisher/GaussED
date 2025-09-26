@@ -1,0 +1,12 @@
+{
+  "hash": "46ad5a25f981cc8524c605ed25d7acc2",
+  "result": {
+    "engine": "jupyter",
+    "markdown": "---\ntitle: \"GaussED\"\n---\n\nWelcome to the GaussED documentation. See the [Tutorials](examples/index.qmd) to get started.\n\nasd asdasdnasd asd asd \nasdn aknsd kabsdo; al da'\\sld\n asd asd\\ \n asd \\amsd asd \n\n ```{html}\n <div style=\"display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1em; font-size: 1.2em;\">\n  <div style=\"font-family: 'Atkinson Hyperlegible Next'; border: 1px solid #ccc; padding: 0.5em;\">\n    <strong>Atkinson Hyperlegible</strong><br>\n    Ill0 — This is a test.<br>\n    Mathematics is the language of nature.\n  </div>\n  <div style=\"font-family: Helvetica; border: 1px solid #ccc; padding: 0.5em;\">\n    <strong>Helvetica</strong><br>\n    Ill0 — This is a test.<br>\n    Mathematics is the language of nature.\n  </div>\n  <div style=\"font-family: Garamond; border: 1px solid #ccc; padding: 0.5em;\">\n    <strong>Garamond</strong><br>\n    Ill0 — This is a test.<br>\n    Mathematics is the language of nature.\n  </div>\n</div>\n ```\n\n",
+    "supporting": [
+      "index_files"
+    ],
+    "filters": [],
+    "includes": {}
+  }
+}

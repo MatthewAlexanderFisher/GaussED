@@ -1,8 +1,0 @@
----
-title: "Tutorials"
----
-
-- [Quickstart](quickstart.qmd)
-- [Operators](operators.qmd)
-- [Bayesian Linear Solvers](bayesian_linear.qmd)
-- [Multioutput GPs](multioutput.qmd)

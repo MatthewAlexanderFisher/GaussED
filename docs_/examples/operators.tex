@@ -1,0 +1,626 @@
+% Options for packages loaded elsewhere
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  letterpaper,
+  DIV=11,
+  numbers=noendperiod]{scrartcl}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+  \setmainfont[]{Atkinson Hyperlegible Next}
+  \setsansfont[]{Atkinson Hyperlegible Next}
+  \setmonofont[]{Atkinson Hyperlegible Mono}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+% Make \paragraph and \subparagraph free-standing
+\makeatletter
+\ifx\paragraph\undefined\else
+  \let\oldparagraph\paragraph
+  \renewcommand{\paragraph}{
+    \@ifstar
+      \xxxParagraphStar
+      \xxxParagraphNoStar
+  }
+  \newcommand{\xxxParagraphStar}[1]{\oldparagraph*{#1}\mbox{}}
+  \newcommand{\xxxParagraphNoStar}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+  \let\oldsubparagraph\subparagraph
+  \renewcommand{\subparagraph}{
+    \@ifstar
+      \xxxSubParagraphStar
+      \xxxSubParagraphNoStar
+  }
+  \newcommand{\xxxSubParagraphStar}[1]{\oldsubparagraph*{#1}\mbox{}}
+  \newcommand{\xxxSubParagraphNoStar}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+\makeatother
+
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{241,243,245}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.40,0.45,0.13}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\BuiltInTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\ExtensionTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.28,0.35,0.67}{#1}}
+\newcommand{\ImportTok}[1]{\textcolor[rgb]{0.00,0.46,0.62}{#1}}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\RegionMarkerTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.07,0.07,0.07}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
+
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+
+
+
+
+
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+
+
+ 
+
+
+\KOMAoption{captions}{tableheading}
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={GP Operators},
+  colorlinks=true,
+  linkcolor={blue},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+
+\title{GP Operators}
+\author{}
+\date{}
+\begin{document}
+\maketitle
+
+
+\subsection{\texorpdfstring{\texttt{Partial}
+Operator}{Partial Operator}}\label{partial-operator}
+
+\subsubsection{What it is}\label{what-it-is}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Operator:} \(\mathrm{Partial}(j)\) maps \(f\) to
+  \(\partial_{x_j} f\).
+\item
+  \textbf{As a probe:}
+  \(F^{(\partial)} = \text{Probe}((\mathrm{Partial}(j),),\, \mathrm{Eval}(X))\).
+\end{itemize}
+
+\subsubsection{Meaning}\label{meaning}
+
+\[
+F^{(\partial)}(f) \;=\; \Big(\tfrac{\partial}{\partial x_j} f(x_i)\Big)_{i=1}^n \in \mathbb{R}^{n\times m}.
+\]
+
+\subsubsection{Cross-covariances via operator
+calculus}\label{cross-covariances-via-operator-calculus}
+
+For a scalar base kernel \(k\),
+
+\[
+\begin{aligned}
+\operatorname{cov}\!\big[\partial_{x_j} f(x),\, f(y)\big] &= \partial_{x_j} k(x,y),\\
+\operatorname{cov}\!\big[\partial_{x_j} f(x),\, \partial_{y_\ell} f(y)\big] &= \partial_{x_j}\partial_{y_\ell} k(x,y).
+\end{aligned}
+\]
+
+Thus the Gram for two probes is obtained by applying operators to \(k\)
+\textbf{then} evaluating:
+
+\[
+K_{F^{(\partial)},\,G} \;=\; (\mathrm{Eval}\otimes \mathrm{Eval})\big[(\mathrm{Partial}(j)\otimes \mathcal{O}_G)\,k\big].
+\]
+
+\subsubsection{Conditioning on derivative
+data}\label{conditioning-on-derivative-data}
+
+Given noisy derivative observations
+\(y^{(\partial)} \approx \partial_{x_j} f(X)\),
+
+\[
+\begin{aligned}
+m_{\text{post}}(x_\star)
+&= m(x_\star) + K_{x_\star,\,\partial X}\,\big(K_{\partial X,\partial X}+\Sigma_\varepsilon\big)^{-1}\!\big(y^{(\partial)} - m_{\partial}(X)\big),\\[4pt]
+k_{\text{post}}(x_\star,x_\star)
+&= k(x_\star,x_\star) - K_{x_\star,\,\partial X}\,\big(K_{\partial X,\partial X}+\Sigma_\varepsilon\big)^{-1}\,K_{\partial X,\,x_\star},
+\end{aligned}
+\]
+
+with blocks like
+\(K_{x_\star,\,\partial X} = \partial_{x} k(x_\star, X)\),
+\(K_{\partial X,\partial X}=\partial_x\partial_y k(X,X)\).
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# {-}{-}{-} GP prior {-}{-}{-}}
+\NormalTok{domain   }\OperatorTok{=}\NormalTok{ Euclidean((}\DecValTok{1}\NormalTok{,))}
+\NormalTok{codomain }\OperatorTok{=}\NormalTok{ Codomain((}\DecValTok{1}\NormalTok{,))}
+\NormalTok{mean     }\OperatorTok{=}\NormalTok{ ZeroMeanFun(domain, codomain)}
+\NormalTok{imq\_params }\OperatorTok{=}\NormalTok{ IMQParams(lengthscale}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{0.5}\NormalTok{), amplitude}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{1.24751754}\NormalTok{), beta}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{1.0}\NormalTok{))}
+\NormalTok{imq\_kernel   }\OperatorTok{=}\NormalTok{ IMQKernel(imq\_params)}
+\NormalTok{backend }\OperatorTok{=}\NormalTok{ ExactBackend(solverfns}\OperatorTok{=}\NormalTok{solver\_fns)}
+
+\NormalTok{gp }\OperatorTok{=}\NormalTok{ GP(domain, codomain, mean, imq\_kernel, backend)}
+
+\CommentTok{\# {-}{-}{-} Data {-}{-}{-}}
+\NormalTok{key }\OperatorTok{=}\NormalTok{ jax.random.PRNGKey(}\DecValTok{0}\NormalTok{)}
+\NormalTok{Xtr }\OperatorTok{=}\NormalTok{ jnp.linspace(}\OperatorTok{{-}}\FloatTok{3.0}\NormalTok{, }\FloatTok{3.0}\NormalTok{, }\DecValTok{5}\NormalTok{).reshape(}\OperatorTok{{-}}\DecValTok{1}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{y\_clean }\OperatorTok{=}\NormalTok{ jnp.sin(Xtr).squeeze()}
+\NormalTok{noise }\OperatorTok{=} \FloatTok{0.04}
+\NormalTok{y }\OperatorTok{=}\NormalTok{ y\_clean }\OperatorTok{+}\NormalTok{ noise }\OperatorTok{*}\NormalTok{ jax.random.normal(key, shape}\OperatorTok{=}\NormalTok{y\_clean.shape)}
+
+\CommentTok{\# {-}{-}{-} Probes {-}{-}{-}}
+\NormalTok{Ftr }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(Partial(}\DecValTok{0}\NormalTok{),), fnl}\OperatorTok{=}\NormalTok{Eval(Xtr))}
+\NormalTok{Xt }\OperatorTok{=}\NormalTok{ jnp.linspace(}\OperatorTok{{-}}\FloatTok{5.0}\NormalTok{, }\FloatTok{5.0}\NormalTok{, }\DecValTok{300}\NormalTok{).reshape(}\OperatorTok{{-}}\DecValTok{1}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{Fte }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(), fnl}\OperatorTok{=}\NormalTok{Eval(Xt))}
+
+\CommentTok{\# {-}{-}{-} Model / condition {-}{-}{-}}
+\NormalTok{lik }\OperatorTok{=}\NormalTok{ GaussianLikelihood(noise}\OperatorTok{=}\NormalTok{DiagonalNoise(jnp.array([}\FloatTok{0.01}\NormalTok{])))}
+\NormalTok{model }\OperatorTok{=}\NormalTok{ GPModel(gp}\OperatorTok{=}\NormalTok{gp, likelihood}\OperatorTok{=}\NormalTok{lik)}
+\NormalTok{post }\OperatorTok{=}\NormalTok{ model.condition(Ftr, y)}
+
+\CommentTok{\# {-}{-}{-} Prior mean/var (for reference) {-}{-}{-}}
+\NormalTok{prior\_mean }\OperatorTok{=}\NormalTok{ gp.mean\_spec().}\BuiltInTok{eval}\NormalTok{(Xt)[:, }\DecValTok{0}\NormalTok{]}
+\NormalTok{prior\_var  }\OperatorTok{=}\NormalTok{ jnp.diag(pack\_ev2mat(gp.kernel\_spec().k0(Xt, Xt), (}\DecValTok{1}\NormalTok{,), (}\DecValTok{1}\NormalTok{,)))}
+
+\CommentTok{\# {-}{-}{-} Posterior mean/var {-}{-}{-}}
+\NormalTok{m\_post }\OperatorTok{=}\NormalTok{ post.mean(Fte)}
+\NormalTok{v\_post }\OperatorTok{=}\NormalTok{ post.variance(Fte)}
+
+\CommentTok{\# {-}{-}{-} Plot {-}{-}{-}}
+\NormalTok{xplot }\OperatorTok{=}\NormalTok{ Xt.squeeze()}
+
+\NormalTok{plt.figure(figsize}\OperatorTok{=}\NormalTok{(}\DecValTok{10}\NormalTok{,}\DecValTok{5}\NormalTok{))}
+
+\CommentTok{\# Prior}
+\NormalTok{plt.subplot(}\DecValTok{1}\NormalTok{,}\DecValTok{2}\NormalTok{,}\DecValTok{1}\NormalTok{)}
+\NormalTok{plt.title(}\StringTok{"Prior GP (IMQ)"}\NormalTok{)}
+\NormalTok{plt.fill\_between(xplot,}
+\NormalTok{                 prior\_mean }\OperatorTok{{-}} \DecValTok{2}\OperatorTok{*}\NormalTok{jnp.sqrt(prior\_var),}
+\NormalTok{                 prior\_mean }\OperatorTok{+} \DecValTok{2}\OperatorTok{*}\NormalTok{jnp.sqrt(prior\_var),}
+\NormalTok{                 alpha}\OperatorTok{=}\FloatTok{0.3}\NormalTok{, label}\OperatorTok{=}\StringTok{"$}\CharTok{\textbackslash{}\textbackslash{}}\StringTok{pm2}\CharTok{\textbackslash{}\textbackslash{}}\StringTok{sigma$"}\NormalTok{)}
+\NormalTok{plt.plot(xplot, prior\_mean, }\StringTok{"k{-}{-}"}\NormalTok{, label}\OperatorTok{=}\StringTok{"mean"}\NormalTok{)}
+\NormalTok{plt.scatter(Xtr.squeeze(), y, s}\OperatorTok{=}\DecValTok{25}\NormalTok{, c}\OperatorTok{=}\StringTok{"r"}\NormalTok{, label}\OperatorTok{=}\StringTok{"Data"}\NormalTok{)}
+\NormalTok{plt.legend()}
+
+\CommentTok{\# Posterior}
+\NormalTok{plt.subplot(}\DecValTok{1}\NormalTok{,}\DecValTok{2}\NormalTok{,}\DecValTok{2}\NormalTok{)}
+\NormalTok{plt.title(}\StringTok{"Posterior GP"}\NormalTok{)}
+\NormalTok{plt.fill\_between(xplot,}
+\NormalTok{                 m\_post.reshape(}\OperatorTok{{-}}\DecValTok{1}\NormalTok{,) }\OperatorTok{{-}} \DecValTok{2}\OperatorTok{*}\NormalTok{jnp.sqrt(v\_post),}
+\NormalTok{                 m\_post.reshape(}\OperatorTok{{-}}\DecValTok{1}\NormalTok{,) }\OperatorTok{+} \DecValTok{2}\OperatorTok{*}\NormalTok{jnp.sqrt(v\_post),}
+\NormalTok{                 alpha}\OperatorTok{=}\FloatTok{0.3}\NormalTok{, label}\OperatorTok{=}\StringTok{"$}\CharTok{\textbackslash{}\textbackslash{}}\StringTok{pm2}\CharTok{\textbackslash{}\textbackslash{}}\StringTok{sigma$"}\NormalTok{)}
+\NormalTok{plt.plot(xplot, m\_post, label}\OperatorTok{=}\StringTok{"mean"}\NormalTok{)}
+\NormalTok{plt.scatter(Xtr.squeeze(), y, s}\OperatorTok{=}\DecValTok{25}\NormalTok{, c}\OperatorTok{=}\StringTok{"r"}\NormalTok{, label}\OperatorTok{=}\StringTok{"Data"}\NormalTok{)}
+\NormalTok{plt.legend()}
+
+\NormalTok{plt.tight\_layout()}
+\CommentTok{\# mplcyberpunk.add\_glow\_effects()}
+
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+/var/folders/y9/f2jq2rkn6h16kl4g9j02c2800000gn/T/ipykernel_3002/2933727991.py:63: UserWarning: The figure layout has changed to tight
+  plt.tight_layout()
+\end{verbatim}
+
+\begin{center}
+\pandocbounded{\includegraphics[keepaspectratio]{operators_files/figure-pdf/cell-3-output-2.pdf}}
+\end{center}
+
+\subsection{\texorpdfstring{\texttt{Grad}
+Operator}{Grad Operator}}\label{grad-operator}
+
+We may want to condition a Gaussian process not only on \textbf{function
+values} but also on their \textbf{gradients}.\\
+This is made possible by introducing the \textbf{gradient operator}:
+
+\[
+(\nabla f)(x) = \left( \frac{\partial f}{\partial x_1}(x), \ldots, 
+                     \frac{\partial f}{\partial x_d}(x) \right)^\top .
+\]
+
+This is implemented in \texttt{GaussED} as the \texttt{Grad} operator.
+
+\subsubsection{\texorpdfstring{\textbf{Gradient conditioned on
+evaluations}}{Gradient conditioned on evaluations}}\label{gradient-conditioned-on-evaluations}
+
+\begin{itemize}
+\tightlist
+\item
+  Data: \(f(X)\) observed.\\
+\item
+  Posterior: joint distribution of \(\{ f(X), \nabla f(X_*) \}\).\\
+\item
+  Effect: gradients predicted consistently with observed values.
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\CommentTok{\# GP prior (2D, with ARD)}
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\NormalTok{domain   }\OperatorTok{=}\NormalTok{ Euclidean((}\DecValTok{2}\NormalTok{,))}
+\NormalTok{codomain }\OperatorTok{=}\NormalTok{ Codomain((}\DecValTok{1}\NormalTok{,))}
+\NormalTok{mean     }\OperatorTok{=}\NormalTok{ ZeroMeanFun(domain, codomain)}
+
+\NormalTok{solver\_fns }\OperatorTok{=}\NormalTok{ SolverFns(chol\_solve\_hook(), chol\_sqrt\_hook(), chol\_logdet\_hook())}
+
+\NormalTok{backend }\OperatorTok{=}\NormalTok{ ExactBackend(solverfns}\OperatorTok{=}\NormalTok{solver\_fns)}
+
+\CommentTok{\# ARD lengthscales (ℓ\_x, ℓ\_y); amplitude = σ²}
+\NormalTok{imq\_params }\OperatorTok{=}\NormalTok{ IMQParams(}
+\NormalTok{    lengthscale}\OperatorTok{=}\NormalTok{jnp.array([}\FloatTok{1.0}\NormalTok{, }\FloatTok{0.7}\NormalTok{]),  }\CommentTok{\# ARD}
+\NormalTok{    amplitude}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{1.0}\NormalTok{),}
+\NormalTok{    beta}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{1.0}\NormalTok{),}
+\NormalTok{)}
+\NormalTok{kernel  }\OperatorTok{=}\NormalTok{ IMQKernel(imq\_params)}
+
+\NormalTok{gp      }\OperatorTok{=}\NormalTok{ GP(domain, codomain, mean, kernel, backend)}
+
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\CommentTok{\# Synthetic 2D data}
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\NormalTok{key }\OperatorTok{=}\NormalTok{ jax.random.PRNGKey(}\DecValTok{0}\NormalTok{)}
+\NormalTok{n\_tr }\OperatorTok{=} \DecValTok{60}
+\NormalTok{Xtr }\OperatorTok{=}\NormalTok{ jax.random.uniform(key, (n\_tr, }\DecValTok{2}\NormalTok{), minval}\OperatorTok{={-}}\FloatTok{3.0}\NormalTok{, maxval}\OperatorTok{=}\FloatTok{3.0}\NormalTok{)}
+
+\KeywordTok{def}\NormalTok{ f\_true(xy: jnp.ndarray) }\OperatorTok{{-}\textgreater{}}\NormalTok{ jnp.ndarray:}
+    \CommentTok{\# smooth, non{-}separable target}
+\NormalTok{    x, y }\OperatorTok{=}\NormalTok{ xy[..., }\DecValTok{0}\NormalTok{], xy[..., }\DecValTok{1}\NormalTok{]}
+    \ControlFlowTok{return}\NormalTok{ jnp.sin(x) }\OperatorTok{*}\NormalTok{ jnp.cos(}\FloatTok{0.8} \OperatorTok{*}\NormalTok{ y) }\OperatorTok{+} \FloatTok{0.2} \OperatorTok{*}\NormalTok{ x}
+
+\NormalTok{y\_clean }\OperatorTok{=}\NormalTok{ jax.vmap(f\_true)(Xtr)}
+\NormalTok{noise   }\OperatorTok{=} \FloatTok{0.1}
+\NormalTok{y       }\OperatorTok{=}\NormalTok{ y\_clean }\OperatorTok{+}\NormalTok{ noise }\OperatorTok{*}\NormalTok{ jax.random.normal(key, shape}\OperatorTok{=}\NormalTok{y\_clean.shape)}
+
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\CommentTok{\# Probes}
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\NormalTok{Ftr   }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(), fnl}\OperatorTok{=}\NormalTok{Eval(Xtr))                 }\CommentTok{\# function values at Xtr}
+\NormalTok{lik   }\OperatorTok{=}\NormalTok{ GaussianLikelihood(noise}\OperatorTok{=}\NormalTok{DiagonalNoise(jnp.array([}\FloatTok{0.01}\NormalTok{])))}
+\NormalTok{model }\OperatorTok{=}\NormalTok{ GPModel(gp}\OperatorTok{=}\NormalTok{gp, likelihood}\OperatorTok{=}\NormalTok{lik)}
+\NormalTok{post  }\OperatorTok{=}\NormalTok{ model.condition(Ftr, y)}
+
+\CommentTok{\# Test grid for visualisation}
+\NormalTok{nx }\OperatorTok{=}\NormalTok{ ny }\OperatorTok{=} \DecValTok{60}
+\NormalTok{x1 }\OperatorTok{=}\NormalTok{ jnp.linspace(}\OperatorTok{{-}}\FloatTok{3.5}\NormalTok{, }\FloatTok{3.5}\NormalTok{, nx)}
+\NormalTok{x2 }\OperatorTok{=}\NormalTok{ jnp.linspace(}\OperatorTok{{-}}\FloatTok{3.5}\NormalTok{, }\FloatTok{3.5}\NormalTok{, ny)}
+\NormalTok{Xg1, Xg2 }\OperatorTok{=}\NormalTok{ jnp.meshgrid(x1, x2, indexing}\OperatorTok{=}\StringTok{"xy"}\NormalTok{)}
+\NormalTok{Xgrid }\OperatorTok{=}\NormalTok{ jnp.stack([Xg1.ravel(), Xg2.ravel()], axis}\OperatorTok{=}\DecValTok{1}\NormalTok{)     }\CommentTok{\# (nx*ny, 2)}
+
+\NormalTok{F\_eval  }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(), fnl}\OperatorTok{=}\NormalTok{Eval(Xgrid))                  }\CommentTok{\# function probe}
+\NormalTok{F\_grad  }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(Grad(), ), fnl}\OperatorTok{=}\NormalTok{Eval(Xgrid))  }\CommentTok{\# gradient probe (∂/∂x, ∂/∂y)}
+
+\CommentTok{\# Posterior mean and gradient mean}
+\NormalTok{m\_post\_grid }\OperatorTok{=}\NormalTok{ post.mean(F\_eval).reshape(nx}\OperatorTok{*}\NormalTok{ny)            }\CommentTok{\# (N,)}
+\NormalTok{g\_post\_grid }\OperatorTok{=}\NormalTok{ post.mean(F\_grad).reshape(nx}\OperatorTok{*}\NormalTok{ny, }\DecValTok{2}\NormalTok{)         }\CommentTok{\# (N, 2)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+/var/folders/y9/f2jq2rkn6h16kl4g9j02c2800000gn/T/ipykernel_3002/3575551168.py:31: UserWarning: The figure layout has changed to tight
+  plt.tight_layout()
+\end{verbatim}
+
+\begin{center}
+\pandocbounded{\includegraphics[keepaspectratio]{operators_files/figure-pdf/cell-5-output-2.pdf}}
+\end{center}
+
+\subsubsection{\texorpdfstring{\textbf{Evaluations conditioned on
+gradients}}{Evaluations conditioned on gradients}}\label{evaluations-conditioned-on-gradients}
+
+\begin{itemize}
+\tightlist
+\item
+  Data: \(\nabla f(X)\) observed.\\
+\item
+  Posterior: joint distribution of \(\{ \nabla f(X), f(X_*) \}\).\\
+\item
+  Effect: function values reconstructed from slope information.
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\CommentTok{\# GP prior (2D, with ARD)}
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\NormalTok{domain   }\OperatorTok{=}\NormalTok{ Euclidean((}\DecValTok{2}\NormalTok{,))}
+\NormalTok{codomain }\OperatorTok{=}\NormalTok{ Codomain((}\DecValTok{1}\NormalTok{,))}
+\NormalTok{mean     }\OperatorTok{=}\NormalTok{ ZeroMeanFun(domain, codomain)}
+
+\NormalTok{solver\_fns }\OperatorTok{=}\NormalTok{ SolverFns(svd\_solve\_hook(), svd\_sqrt\_hook(), svd\_logdet\_hook())}
+\NormalTok{backend }\OperatorTok{=}\NormalTok{ ExactBackend(solverfns}\OperatorTok{=}\NormalTok{solver\_fns)}
+
+\CommentTok{\# ARD lengthscales (ℓ\_x, ℓ\_y); amplitude = σ²}
+\NormalTok{imq\_params }\OperatorTok{=}\NormalTok{ IMQParams(}
+\NormalTok{    lengthscale}\OperatorTok{=}\NormalTok{jnp.array([}\FloatTok{2.}\NormalTok{, }\FloatTok{1.9}\NormalTok{]),  }\CommentTok{\# ARD}
+\NormalTok{    amplitude}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{1.0}\NormalTok{),}
+\NormalTok{    beta}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{0.01}\NormalTok{),}
+\NormalTok{)}
+\NormalTok{kernel  }\OperatorTok{=}\NormalTok{ IMQKernel(imq\_params)}
+\NormalTok{gp      }\OperatorTok{=}\NormalTok{ GP(domain, codomain, mean, kernel, backend)}
+
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\CommentTok{\# Synthetic 2D data}
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\NormalTok{key }\OperatorTok{=}\NormalTok{ jax.random.PRNGKey(}\DecValTok{0}\NormalTok{)}
+\NormalTok{n\_tr }\OperatorTok{=} \DecValTok{50}
+\NormalTok{Xtr }\OperatorTok{=}\NormalTok{ jax.random.uniform(key, (n\_tr, }\DecValTok{2}\NormalTok{), minval}\OperatorTok{={-}}\FloatTok{3.0}\NormalTok{, maxval}\OperatorTok{=}\FloatTok{3.0}\NormalTok{)}
+
+\KeywordTok{def}\NormalTok{ f\_true(xy: jnp.ndarray) }\OperatorTok{{-}\textgreater{}}\NormalTok{ jnp.ndarray:}
+\NormalTok{    x, y }\OperatorTok{=}\NormalTok{ xy[..., }\DecValTok{0}\NormalTok{], xy[..., }\DecValTok{1}\NormalTok{]}
+    \ControlFlowTok{return} \FloatTok{0.2} \OperatorTok{*}\NormalTok{ jnp.sin(x) }\OperatorTok{*}\NormalTok{ jnp.cos(}\FloatTok{0.8} \OperatorTok{*}\NormalTok{ y) }\OperatorTok{+} \FloatTok{0.3} \OperatorTok{*}\NormalTok{ x  }\CommentTok{\# scalar}
+
+\CommentTok{\# {-}{-}{-} gradient observations (condition on these!) {-}{-}{-}}
+\CommentTok{\# g\_true: (n\_tr, 2) with columns [∂f/∂x, ∂f/∂y]}
+\NormalTok{g\_true }\OperatorTok{=}\NormalTok{ jax.vmap(jax.grad(f\_true))(Xtr)}
+
+\NormalTok{grad\_noise }\OperatorTok{=} \FloatTok{0.1}
+\NormalTok{key\_g }\OperatorTok{=}\NormalTok{ jax.random.split(key, }\DecValTok{2}\NormalTok{)[}\DecValTok{1}\NormalTok{]}
+\NormalTok{g\_obs }\OperatorTok{=}\NormalTok{ g\_true }\OperatorTok{+}\NormalTok{ grad\_noise }\OperatorTok{*}\NormalTok{ jax.random.normal(key\_g, g\_true.shape)  }\CommentTok{\# (n\_tr, 2)}
+
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\CommentTok{\# Probes (train on gradients)}
+\CommentTok{\# {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
+\CommentTok{\# Gradient operator produces a 2{-}output (multioutput) GP at each location.}
+\NormalTok{Ftr   }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(Grad(),), fnl}\OperatorTok{=}\NormalTok{Eval(Xtr))        }\CommentTok{\# gradient at Xtr, shape \textasciitilde{} (n\_tr, 2)}
+\CommentTok{\# Per{-}output diagonal noise (broadcast across n\_tr)}
+\NormalTok{lik   }\OperatorTok{=}\NormalTok{ GaussianLikelihood(noise}\OperatorTok{=}\NormalTok{DiagonalNoise(jnp.array([}\FloatTok{0.01}\NormalTok{, }\FloatTok{0.01}\NormalTok{])))}
+\NormalTok{model }\OperatorTok{=}\NormalTok{ GPModel(gp}\OperatorTok{=}\NormalTok{gp, likelihood}\OperatorTok{=}\NormalTok{lik)}
+
+\CommentTok{\# Condition on gradient observations}
+\NormalTok{post  }\OperatorTok{=}\NormalTok{ model.condition(Ftr, g\_obs)}
+
+\CommentTok{\# grid for visualisation}
+\NormalTok{nx }\OperatorTok{=}\NormalTok{ ny }\OperatorTok{=} \DecValTok{60}
+\NormalTok{x1 }\OperatorTok{=}\NormalTok{ jnp.linspace(}\OperatorTok{{-}}\FloatTok{3.5}\NormalTok{, }\FloatTok{3.5}\NormalTok{, nx)}
+\NormalTok{x2 }\OperatorTok{=}\NormalTok{ jnp.linspace(}\OperatorTok{{-}}\FloatTok{3.5}\NormalTok{, }\FloatTok{3.5}\NormalTok{, ny)}
+\NormalTok{Xg1, Xg2 }\OperatorTok{=}\NormalTok{ jnp.meshgrid(x1, x2, indexing}\OperatorTok{=}\StringTok{"xy"}\NormalTok{)}
+\NormalTok{Xgrid }\OperatorTok{=}\NormalTok{ jnp.stack([Xg1.ravel(), Xg2.ravel()], axis}\OperatorTok{=}\DecValTok{1}\NormalTok{)     }\CommentTok{\# (nx*ny, 2)}
+
+\NormalTok{F\_eval }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(),        fnl}\OperatorTok{=}\NormalTok{Eval(Xgrid))            }\CommentTok{\# function values}
+\NormalTok{F\_grad }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(Grad(),), fnl}\OperatorTok{=}\NormalTok{Eval(Xgrid))            }\CommentTok{\# gradient values}
+
+\CommentTok{\# Posterior means}
+\NormalTok{m\_post\_grid }\OperatorTok{=}\NormalTok{ post.mean(F\_eval).reshape(nx}\OperatorTok{*}\NormalTok{ny)            }\CommentTok{\# (N,)}
+\NormalTok{g\_post\_grid }\OperatorTok{=}\NormalTok{ post.mean(F\_grad).reshape(nx}\OperatorTok{*}\NormalTok{ny, }\DecValTok{2}\NormalTok{)         }\CommentTok{\# (N,2)}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{operators_files/figure-pdf/cell-7-output-1.pdf}}
+
+In \texttt{GaussED}, these are unified via the \textbf{probe
+abstraction}: both evaluations and gradients are simply \emph{operators}
+applied to the GP.
+
+\subsection{\texorpdfstring{\texttt{Linearise}
+Operator}{Linearise Operator}}\label{linearise-operator}
+
+Suppose we have \(f: \mathcal{X} \rightarrow \mathbb{R}^D\) and a
+function \(g:\mathbb{R}^D\rightarrow \mathbb{R}^D\). Then \(g \circ f\)
+is Gaussian if and only if \(g\) is linear.
+
+\textbf{Approximate Solution:} Linearise
+\(g(y) \approx g(y_0) + J_g(y_0)(y - y_0)\). About a reference \(f_0\),
+we have:
+
+\[ 
+g(f(x)) \approx g(f_0(x)) + J_g(f_0(x))(f(x) - f_0(x)). 
+\]
+
+This is used in Warped-Sequential Active Bayesian integration (WSABI) of
+Gunter et al.~(2019).
+
+\textbf{Motivation}: Want to normalise posteriors (some important prior
+information is that posterior density is non-negative!)
+
+In the following we linearise based upon \(g(y) = \alpha + y^2/2\).
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# {-}{-}{-} GP prior {-}{-}{-}}
+\NormalTok{domain   }\OperatorTok{=}\NormalTok{ Euclidean((}\DecValTok{1}\NormalTok{,))}
+\NormalTok{codomain }\OperatorTok{=}\NormalTok{ Codomain((}\DecValTok{1}\NormalTok{,))}
+\NormalTok{mean     }\OperatorTok{=}\NormalTok{ ZeroMeanFun(domain, codomain)}
+\NormalTok{rbf\_params }\OperatorTok{=}\NormalTok{ RBFParams(lengthscale}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{0.1}\NormalTok{), amplitude}\OperatorTok{=}\NormalTok{jnp.array(}\FloatTok{1.0}\NormalTok{))}
+\NormalTok{kernel   }\OperatorTok{=}\NormalTok{ RBFKernel(rbf\_params)}
+
+\NormalTok{gp }\OperatorTok{=}\NormalTok{ GP(domain, codomain, mean, kernel, backend)}
+
+\CommentTok{\# {-}{-}{-} Data {-}{-}{-}}
+\NormalTok{key }\OperatorTok{=}\NormalTok{ jax.random.PRNGKey(}\DecValTok{0}\NormalTok{)}
+\NormalTok{Xtr }\OperatorTok{=}\NormalTok{ jnp.linspace(}\OperatorTok{{-}}\FloatTok{3.0}\NormalTok{, }\FloatTok{3.0}\NormalTok{, }\DecValTok{10}\NormalTok{).reshape(}\OperatorTok{{-}}\DecValTok{1}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{y\_clean }\OperatorTok{=}\NormalTok{ jnp.sin(Xtr).squeeze()}
+\NormalTok{noise }\OperatorTok{=} \FloatTok{0.1}
+\NormalTok{y }\OperatorTok{=}\NormalTok{ y\_clean }\OperatorTok{+}\NormalTok{ noise }\OperatorTok{*}\NormalTok{ jax.random.normal(key, shape}\OperatorTok{=}\NormalTok{y\_clean.shape)}
+
+\CommentTok{\# {-}{-}{-} Probes {-}{-}{-}}
+\NormalTok{Ftr }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(), fnl}\OperatorTok{=}\NormalTok{Eval(Xtr))}
+\NormalTok{Xt  }\OperatorTok{=}\NormalTok{ jnp.linspace(}\OperatorTok{{-}}\FloatTok{5.0}\NormalTok{, }\FloatTok{5.0}\NormalTok{, }\DecValTok{300}\NormalTok{).reshape(}\OperatorTok{{-}}\DecValTok{1}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{Fte }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(), fnl}\OperatorTok{=}\NormalTok{Eval(Xt))}
+
+\CommentTok{\# {-}{-}{-} Model / condition {-}{-}{-}}
+\NormalTok{lik   }\OperatorTok{=}\NormalTok{ GaussianLikelihood()}
+\NormalTok{model }\OperatorTok{=}\NormalTok{ GPModel(gp}\OperatorTok{=}\NormalTok{gp, likelihood}\OperatorTok{=}\NormalTok{lik)}
+\NormalTok{post  }\OperatorTok{=}\NormalTok{ model.condition(Ftr, y)}
+
+\CommentTok{\# {-}{-}{-} Prior mean/var (for reference) {-}{-}{-}}
+\NormalTok{prior\_mean }\OperatorTok{=}\NormalTok{ gp.mean\_spec().}\BuiltInTok{eval}\NormalTok{(Xt)[:, }\DecValTok{0}\NormalTok{]}
+\NormalTok{prior\_var  }\OperatorTok{=}\NormalTok{ jnp.diag(pack\_ev2mat(gp.kernel\_spec().k0(Xt, Xt), (}\DecValTok{1}\NormalTok{,), (}\DecValTok{1}\NormalTok{,)))}
+
+\CommentTok{\# {-}{-}{-} Posterior (unwarped) {-}{-}{-}}
+\NormalTok{m\_post }\OperatorTok{=}\NormalTok{ post.mean(Fte)          }\CommentTok{\# shape (n,1)}
+\NormalTok{v\_post }\OperatorTok{=}\NormalTok{ post.variance(Fte)      }\CommentTok{\# shape (n,)}
+
+\CommentTok{\# f\_0 function}
+\KeywordTok{def}\NormalTok{ ref\_fn(X: Array) }\OperatorTok{{-}\textgreater{}}\NormalTok{ Array:}
+    \ControlFlowTok{return}\NormalTok{ post.mean(Probe(ops}\OperatorTok{=}\NormalTok{(), fnl}\OperatorTok{=}\NormalTok{Eval(X)))  }
+
+\NormalTok{g }\OperatorTok{=} \KeywordTok{lambda}\NormalTok{ u: }\FloatTok{0.1} \OperatorTok{+}\NormalTok{ u }\OperatorTok{**} \DecValTok{2} \OperatorTok{/} \DecValTok{2}
+
+\CommentTok{\# jacobian=None =\textgreater{} AD fallback via jax.jacfwd(g)}
+\NormalTok{op\_pos }\OperatorTok{=}\NormalTok{ Linearise(forward}\OperatorTok{=}\NormalTok{g, jacobian}\OperatorTok{=}\VariableTok{None}\NormalTok{, ref\_fn}\OperatorTok{=}\NormalTok{ref\_fn)}
+
+\CommentTok{\# Test probe that applies the linearised warp}
+\NormalTok{Fte\_pos }\OperatorTok{=}\NormalTok{ Probe(ops}\OperatorTok{=}\NormalTok{(op\_pos,), fnl}\OperatorTok{=}\NormalTok{Eval(Xt))}
+
+\CommentTok{\# Posterior under linearised warp (still Gaussian thanks to affine map)}
+\NormalTok{m\_pos }\OperatorTok{=}\NormalTok{ post.mean(Fte\_pos)       }\CommentTok{\# (n,1)}
+\NormalTok{v\_pos }\OperatorTok{=}\NormalTok{ post.variance(Fte\_pos)   }\CommentTok{\# (n,)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+/var/folders/y9/f2jq2rkn6h16kl4g9j02c2800000gn/T/ipykernel_3002/173714460.py:39: UserWarning: The figure layout has changed to tight
+  plt.tight_layout()
+\end{verbatim}
+
+\pandocbounded{\includegraphics[keepaspectratio]{operators_files/figure-pdf/cell-10-output-2.pdf}}
+
+
+
+
+\end{document}

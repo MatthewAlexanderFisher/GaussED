@@ -1,0 +1,85 @@
+/*-- scss:defaults --*/
+/* Reveal/Quarto variables you can override */
+$backgroundColor: #ffffff !default;
+
+// $headingFont: "Lato", Arial, sans-serif;
+// $mainFont:    "Lato", Arial, sans-serif;
+$mainFontSize: 20px !default;
+
+/* Slightly blend text toward the background hue.
+   Increase the first percentage (e.g. 15%) for a stronger tint. */
+$mainColor:    mix($backgroundColor, #191f35, 8%) !default;  // body text
+$headingColor: mix($backgroundColor, #191f35,   4%) !default; // headings
+
+/* Optional: make code/comments a touch dimmer */
+$code-color:   mix($backgroundColor, #0820fe, 1%) !default;
+
+/*-- scss:rules --*/
+/* Keep headings non-bold if you prefer that look */
+.reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+  font-weight: 500 !important;
+}
+
+/* Slight antialiasing for dark backgrounds */
+.reveal {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* If you also want monospace + code to be more TeX-like, tweak these: */
+// $font-family-monospace: "Iosevka", "JetBrains Mono", ui-monospace, monospace !default;
+// $code-block-bg: rgba(255,255,255,0.05) !default;
+
+/*-- scss:rules --*/
+/* Extra CSS rules on top of variables */
+.reveal {
+  line-height: 1.4;
+}
+
+// .reveal h1, .reveal h2, .reveal h3 {
+//   font-weight: 600;    /* a bit bolder for headings */
+// }
+
+
+/*-- scss:uses --*/
+/* You can @use other scss modules here if needed */
+// .reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+//   font-weight: 700 !important;
+// }
+.reveal h1 strong, .reveal h1 b,
+.reveal h2 strong, .reveal h2 b,
+.reveal h3 strong, .reveal h3 b,
+.reveal h4 strong, .reveal h4 b,
+.reveal h5 strong, .reveal h5 b,
+.reveal h6 strong, .reveal h6 b {
+  font-weight: inherit !important;
+}
+
+/* Turn off auto-capitalisation and any faux small caps on headings */
+.reveal h1,
+.reveal h2,
+.reveal h3,
+.reveal h4,
+.reveal h5,
+.reveal h6 {
+  text-transform: none !important;
+  font-variant: normal !important;
+  font-variant-caps: normal !important;
+  letter-spacing: normal !important; /* moon adds tracking for caps */
+}
+
+/* Title slide specifics (Quarto puts headings here too, but just in case) */
+.reveal .title-slide h1,
+.reveal .title-slide h2,
+.reveal .title-slide h3 {
+  text-transform: none !important;
+  font-variant-caps: normal !important;
+  letter-spacing: normal !important;
+}
+
+/* TOC entries (if you’re using toc: true) */
+.reveal .toc a {
+  text-transform: none !important;
+  font-variant-caps: normal !important;
+  letter-spacing: normal !important;
+}

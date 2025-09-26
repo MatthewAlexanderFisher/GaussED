@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Tuple, Callable
 import jax, jax.numpy as jnp
 from jax import Array
+from jax.scipy.special import gamma
 
 from gaussed.domains.base import Domain
 from gaussed.utils.constraints import Positive, Transform
@@ -80,6 +81,61 @@ class IMQKernel:
         L, R = self.left_shape, self.right_shape
         K = K_base.reshape((n_f, n_g, *L, *R))
         return K
+
+
+    def spectral_density_1d(self, omega: jnp.ndarray, *, N: int = 1024) -> jnp.ndarray:
+        r"""
+        1D spectral density S(ω) for IMQ k(τ)=σ² (1+(τ/ℓ)²)^(-β), using the angular-frequency pair:
+            S(ω) = ∫ k(τ) e^{-iωτ} dτ,   k(τ) = (1/2π) ∫ S(ω) e^{iωτ} dω.
+
+        Quadrature form (τ = ℓ tan t):
+            S(ω) = 2 σ² ℓ ∫_{0}^{π/2} cos^{2β-2}(t) · cos(ω ℓ tan t) dt.
+
+        Args:
+            omega: array of angular frequencies (rad / unit).
+            N:     number of midpoint samples over (0, π/2); increase for higher accuracy.
+
+        Returns:
+            S(ω) with the same shape/broadcasting as `omega`.
+        """
+        ell, sigma2, beta = self.get_transformed_params()  # ℓ>0, σ²>0, β>1/2 recommended
+
+        w = jnp.abs(omega)
+
+        # Exact value at ω=0:
+        # S(0) = 2 σ² ∫_0^∞ (1+(τ/ℓ)^2)^(-β) dτ = σ² ℓ √π Γ(β-1/2)/Γ(β)
+        S0 = sigma2 * ell * jnp.sqrt(jnp.pi) * gamma(beta - 0.5) / gamma(beta)
+
+        # exact Cauchy case β=1
+        def s_cauchy(w_):
+            return sigma2 * jnp.pi * ell * jnp.exp(-ell * w_)
+        use_cauchy = jnp.isclose(beta, 1.0)
+
+        # Midpoint rule over t ∈ (0, π/2)
+        # t_k = (k+1/2) * h,  k=0..N-1,  h = (π/2)/N
+        h = 0.5 * jnp.pi / float(N)
+        k = jnp.arange(N, dtype=ell.dtype)
+        t = (k + 0.5) * h
+        cos_t = jnp.cos(t)
+        tan_t = jnp.tan(t)
+
+        # Weight factor: cos^{2β-2}(t); note integrability requires β > 1/2
+        weight = cos_t ** (2.0 * beta - 2.0)  # (N,)
+
+        # Broadcast over omega: shape (..., N)
+        z = (ell * w)[..., None]              # (..., 1)
+        integrand = ell * weight[None, :] * jnp.cos(z * tan_t[None, :])  # (..., N)
+
+        I = h * jnp.sum(integrand, axis=-1)   # (...,)
+
+        S_num = 2.0 * sigma2 * I
+
+        # Blend exact ω=0 value to remove removable singularity numerically
+        S_num = jnp.where(w == 0, S0, S_num)
+
+        # exact β=1 shortcut (closed form)
+        return jnp.where(use_cauchy, s_cauchy(w), S_num)
+
 
     def get_transformed_params(self):
         return (

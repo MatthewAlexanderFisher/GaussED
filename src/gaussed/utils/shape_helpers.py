@@ -298,6 +298,19 @@ def unpack_vector(v_flat: Array, n: int, out_shape: Tuple[int, ...]) -> Array:
         return v_flat.reshape(n,)
     return v_flat.reshape((n, *out_shape))
 
+def pack_kernel(K_raw: Array, out_shape: Tuple[int, ...]) -> Array:
+    """(nF, nG, *out_shape, *out_shape) -> (nF*L, nG*L)."""
+    nF, nG = K_raw.shape[:2]
+    L = _prod(out_shape) if out_shape else 1
+    return K_raw.reshape(nF * L, nG * L)
+
+def _flatten_kernel(K_raw: Array) -> Tuple[Array, int, Tuple[int, ...]]:
+    """(nF,nG,*out,*out) -> (nF*L, nG*L), L, out_shape"""
+    nF, nG = K_raw.shape[:2]
+    out_shape = tuple(K_raw.shape[2:])
+    L = _prod(out_shape) if out_shape else 1
+    return K_raw.reshape(nF * L, nG * L), L, out_shape
+
 
 # ============================================================================
 # Utility Functions
@@ -332,6 +345,16 @@ def restore_from_2d(y: Array, was_squeezed: bool) -> Array:
     return y.squeeze(-1) if was_squeezed else y
 
 
+def _append(shape: Tuple[int, ...], *more: int) -> Tuple[int, ...]:
+    return tuple(shape) + tuple(more)
+
+def _append_full(shape: Tuple[int, ...], tail: Tuple[int, ...]) -> Tuple[int, ...]:
+    return (*shape, *tail)
+
+def _append_flat(shape: Tuple[int, ...], in_shape: Tuple[int, ...]) -> Tuple[int, ...]:
+    return (*shape, _prod(in_shape))
+
+
 # ============================================================================
 # Legacy Aliases (for backward compatibility)
 # ============================================================================
@@ -350,6 +373,4 @@ unpack_mat2ev = unpack_matrix_to_kernel
 pack_vec = pack_vector
 pack_vec_flat = pack_vector_flat
 unpack_vec = unpack_vector
-pack_kernel = pack_kernel_to_matrix
-_flatten_kernel = flatten_kernel_for_solver
 _unflatten_var_diag = unpack_vector

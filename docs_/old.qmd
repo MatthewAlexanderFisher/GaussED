@@ -1,0 +1,602 @@
+
+
+```{ojs}
+//| echo: false
+
+// Imports
+// import * as d3 from "d3"
+// import * as Plot from "@observablehq/plot"
+import { xySlider } from "@mootari/2d-slider"
+
+// ========= Controls =========
+//| panel: input
+
+// Sample size
+viewof n = Inputs.range([20, 100], { value: 50, step: 5, label: md`${tex`n`}` })
+
+// True parameters used to SIMULATE the data
+viewof trueMu = Inputs.range([-2, 2], { value: 0.5, step: 0.1, label: md`${tex`\mu_{\text{true}}`}` })
+viewof trueSigma = Inputs.range([0.3, 3], { value: 1.2, step: 0.1, label: md`${tex`\sigma_{\text{true}}`}` })
+
+// Grid controls
+viewof muHalfWidth = Inputs.range([1, 5], { value: 2.5, step: 0.1, label: md`${tex`\text{μ-range half-width}`}` })
+viewof sig2Max = Inputs.range([0.2, 6], { value: 3, step: 0.1, label: md`${tex`\text{σ² max}`}` })
+viewof gridN = Inputs.range([25, 121], { value: 81, step: 8, label: md`${tex`\text{grid size}`}` })
+
+// ========= Data & stats =========
+
+// Simulate iid Normal data via Box–Muller
+X = {
+  const m = trueMu, s = trueSigma;
+  const out = new Array(n);
+  for (let i = 0; i < n; i += 2) {
+    const u = Math.random(), v = Math.random();
+    const R = Math.sqrt(-2 * Math.log(u)), T = 2 * Math.PI * v;
+    const z0 = R * Math.cos(T), z1 = R * Math.sin(T);
+    out[i]   = m + s * z0;
+    if (i + 1 < n) out[i + 1] = m + s * z1;
+  }
+  return out;
+}
+
+// Sufficient stats
+xbar = d3.mean(X)
+S = d3.sum(X, x => (x - xbar) ** 2)       // Σ (x_i - x̄)²
+
+// Log-likelihood ℓ(μ,σ²) (exact, not just up to constant)
+logLik = (mu, sigma2) => {
+  const ss = d3.sum(X, x => (x - mu) ** 2);
+  return -0.5 * n * Math.log(2 * Math.PI * sigma2) - 0.5 * ss / sigma2;
+}
+
+// MLEs: μ̂ = x̄,  σ̂² = (1/n) Σ (x_i - x̄)²
+muhat = xbar
+sigma2hat = S / n
+
+// ========= Contour grid =========
+
+muGrid = d3.ticks(muhat - muHalfWidth, muhat + muHalfWidth, gridN - 1)
+sig2Grid = d3.ticks(Math.max(0.05, sigma2hat / 20), sig2Max, gridN - 1).filter(s => s > 0)
+
+// Grid for Plot: [{mu, sig2, ll}]
+LLgrid = {
+  const out = [];
+  for (const mu of muGrid) {
+    for (const s2 of sig2Grid) {
+      out.push({ mu, sig2: s2, ll: logLik(mu, s2) });
+    }
+  }
+  return out;
+}
+
+// ========= 2D probe (slider) =========
+
+// NOTE: xySlider may return either [x, y] or {x, y}. We'll read both safely.
+viewof probe = xySlider({
+  width: 360, height: 360,
+  x: { min: muGrid[0],   max: muGrid.at(-1), value: muhat,     label: md`${tex`\mu`}` },
+  y: { min: sig2Grid[0], max: sig2Grid.at(-1), value: sigma2hat, label: md`${tex`\sigma^2`}` },
+  grid: false
+})
+
+// Robust extraction with fallbacks to MLEs (prevents .toFixed errors)
+probeMu = (Array.isArray(probe) ? probe[0] : probe?.x) ?? muhat
+probeSig2 = (Array.isArray(probe) ? probe[1] : probe?.y) ?? sigma2hat
+probeLL = logLik(probeMu, probeSig2)
+
+// ========= Readout =========
+md`
+${tex`\textbf{Probe: } \mu = ${probeMu.toFixed(2)},\ \sigma^2 = ${probeSig2.toFixed(3)}\quad \Rightarrow\quad \ell = ${probeLL.toFixed(2)}`}
+${tex`\textbf{MLE: } \hat\mu = ${muhat.toFixed(2)},\ \hat\sigma^2 = ${sigma2hat.toFixed(3)}`}
+`
+
+// ========= Plot =========
+
+md`${tex`\textbf{Log-likelihood contours } \ell(\mu,\sigma^2)\ \text{for Normal}(X_i \stackrel{iid}{\sim} \mathcal N(\mu,\sigma^2))`}`
+
+Plot.plot({
+  width: 760,
+  height: 460,
+  marginLeft: 48,
+  x: { label: "μ" },              // SVG text (cannot render KaTeX)
+  y: { label: "σ²" },             // (Use md+tex captions like above for maths)
+  color: { scheme: "turbo", legend: true, label: "log-likelihood" },
+  marks: [
+    // Heatmap background (helps orientation)
+    Plot.cell(LLgrid, { x: "mu", y: "sig2", fill: "ll", tip: true }),
+
+    // Contours of ℓ(μ,σ²)
+    Plot.contour(LLgrid, {
+      x: "mu",
+      y: "sig2",
+      z: "ll",
+      thresholds: 10,
+      stroke: "currentColor",
+      fill: "none"
+    }),
+
+    // MLE marker
+    Plot.dot([{ mu: muhat, sig2: sigma2hat }], {
+      x: "mu", y: "sig2",
+      r: 5, stroke: "black", fill: "white",
+      title: d => `MLE\nmu=${d.mu.toFixed(2)}\nsig2=${d.sig2.toFixed(3)}`
+    }),
+
+    // Probe marker
+    Plot.dot([{ mu: probeMu, sig2: probeSig2 }], {
+      x: "mu", y: "sig2",
+      r: 5, fill: "black",
+      title: `Probe\nmu=${probeMu.toFixed(2)}\nsig2=${probeSig2.toFixed(3)}\nlogLik=${probeLL.toFixed(2)}`
+    }),
+
+    // Crosshairs at the probe
+    Plot.ruleX([probeMu]),
+    Plot.ruleY([probeSig2])
+  ]
+})
+
+```
+ -->
+
+
+
+<!-- 
+```{ojs}
+//| panel: input
+//| echo: false
+
+viewof n = Inputs.range([20, 400], { value: 120, step: 20, label: md`${tex`n`}` })
+viewof trueMu = Inputs.range([-2, 2], { value: 0.5, step: 0.1, label: md`${tex`\mu_{\text{true}}`}` })
+viewof trueSigma = Inputs.range([0.3, 3], { value: 1.2, step: 0.1, label: md`${tex`\sigma_{\text{true}}`}` })
+viewof resim = Inputs.button("Resimulate data")
+
+viewof muHalfWidth = Inputs.range([1, 5], { value: 2.5, step: 0.1, label: md`${tex`\text{μ-range half-width}`}` })
+viewof sig2Max = Inputs.range([0.2, 6], { value: 3, step: 0.1, label: md`${tex`\text{σ² max}`}` })
+viewof gridN = Inputs.range([25, 121], { value: 81, step: 8, label: md`${tex`\text{grid size}`}` })
+viewof bins = Inputs.range([10, 60], { value: 24, step: 2, label: md`${tex`\text{histogram bins}`}` })
+
+// ============== Data & stats ==============
+
+X = {
+  resim; // re-simulate when button clicked
+  const m = trueMu, s = trueSigma;
+  const out = new Array(n);
+  for (let i = 0; i < n; i += 2) {
+    const u = Math.random(), v = Math.random();
+    const R = Math.sqrt(-2 * Math.log(u)), T = 2 * Math.PI * v;
+    const z0 = R * Math.cos(T), z1 = R * Math.sin(T);
+    out[i] = m + s * z0;
+    if (i + 1 < n) out[i + 1] = m + s * z1;
+  }
+  return out;
+}
+
+xbar = d3.mean(X)
+S = d3.sum(X, x => (x - xbar) ** 2) // Σ (x_i - x̄)²
+
+// Log-likelihood ℓ(μ,σ²)
+logLik = (mu, sigma2) => {
+  const ss = d3.sum(X, x => (x - mu) ** 2);
+  return -0.5 * n * Math.log(2 * Math.PI * sigma2) - 0.5 * ss / sigma2;
+}
+
+// MLEs
+muhat = xbar
+sigma2hat = S / n
+
+// Contour grid
+muGrid = d3.ticks(muhat - muHalfWidth, muhat + muHalfWidth, gridN - 1)
+sig2Grid = d3.ticks(Math.max(0.05, sigma2hat / 20), sig2Max, gridN - 1).filter(s => s > 0)
+
+LLgrid = {
+  const out = [];
+  for (const mu of muGrid) for (const s2 of sig2Grid) out.push({ mu, sig2: s2, ll: logLik(mu, s2) });
+  return out;
+}
+
+// === LEFT PLOT + INTERACTION (single source of truth) ===
+
+// geometry & domains (scalars)
+plotW = 540
+plotH = 420
+marginTop = 20
+marginRight = 20
+marginBottom = 48
+marginLeft = 56
+innerW = plotW - marginLeft - marginRight
+innerH = plotH - marginTop - marginBottom
+
+muDomain = [muGrid[0], muGrid.at(-1)]
+sig2Domain = [sig2Grid[0], sig2Grid.at(-1)]
+
+// Build everything INSIDE the input so it's rendered exactly once
+viewof probe = {
+  // Make the wrapper act like “inline content”, not a separate input block
+  const wrap = html`<div style="display:inline-block; position:relative; width:${plotW}px; height:${plotH}px;"></div>`;
+  // This wrapper is the INPUT element; initialise its value
+  wrap.value = { x: muhat, y: sigma2hat };
+
+  // Base plot: raster (background) + contours + MLE
+  const base = Plot.plot({
+    width: plotW,
+    height: plotH,
+    marginLeft, marginRight, marginTop, marginBottom,
+    x: { label: "μ", domain: muDomain },
+    y: { label: "σ²", domain: sig2Domain },
+    color: { scheme: "turbo", legend: true, label: "log-likelihood" },
+    marks: [
+      // Heatmap background (prevents white gaps)
+      Plot.raster(LLgrid, { x: "mu", y: "sig2", z: "ll" }),
+
+      // Contours over the raster
+      Plot.contour(LLgrid, {
+        x: "mu", y: "sig2", z: "ll",
+        thresholds: 18,
+        stroke: "currentColor",
+        strokeWidth: 1,
+        fill: "none"
+      }),
+
+      // MLE marker
+      Plot.dot([{ mu: muhat, sig2: sigma2hat }], {
+        x: "mu", y: "sig2",
+        r: 5, stroke: "black", fill: "white",
+        title: d => `MLE\nmu=${d.mu.toFixed(2)}\nsig2=${d.sig2.toFixed(3)}`
+      })
+    ]
+  });
+  wrap.append(base);
+
+  // Crosshairs overlay (follows the probe)
+  const cross = () =>
+    Plot.plot({
+      width: plotW, height: plotH,
+      marginLeft, marginRight, marginTop, marginBottom,
+      x: { domain: muDomain }, y: { domain: sig2Domain },
+      marks: [Plot.ruleX([wrap.value.x]), Plot.ruleY([wrap.value.y])]
+    });
+
+  let crossEl = cross();
+  const crossLayer = html`<div style="position:absolute; inset:0; pointer-events:none;"></div>`;
+  crossLayer.append(crossEl);
+  wrap.append(crossLayer);
+
+  // Transparent hitbox aligned to inner chart area
+  const hit = html`<div style="
+    position:absolute;
+    left:${marginLeft}px; top:${marginTop}px;
+    width:${innerW}px; height:${innerH}px;
+    cursor: crosshair; z-index: 10; background: transparent;"></div>`;
+
+  function setFromEvent(evt) {
+    const rect = hit.getBoundingClientRect();
+    const px = Math.min(Math.max(0, evt.clientX - rect.left), innerW);
+    const py = Math.min(Math.max(0, evt.clientY - rect.top), innerH);
+    const x = muDomain[0] + (px / innerW) * (muDomain[1] - muDomain[0]);
+    const y = sig2Domain[1] - (py / innerH) * (sig2Domain[1] - sig2Domain[0]); // invert y
+
+    wrap.value = { x, y };
+    // refresh crosshairs
+    const newCross = cross();
+    crossLayer.replaceChild(newCross, crossEl);
+    crossEl = newCross;
+
+    wrap.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+  }
+
+  let dragging = false;
+  hit.addEventListener("pointerdown", (e) => { dragging = true; setFromEvent(e); hit.setPointerCapture(e.pointerId); });
+  hit.addEventListener("pointermove", (e) => { if (dragging) setFromEvent(e); });
+  hit.addEventListener("pointerup",   () => { dragging = false; });
+  hit.addEventListener("pointerleave",() => { dragging = false; });
+
+  wrap.append(hit);
+
+  // Kick one initial update for dependents
+  queueMicrotask(() => wrap.dispatchEvent(new CustomEvent("input", { bubbles: true })));
+
+  return wrap;
+}
+
+// Robust extraction
+p = probe ?? {x: muhat, y: sigma2hat}
+probeMu = (Array.isArray(p) ? p[0] : p.x) ?? muhat
+probeSig2 = (Array.isArray(p) ? p[1] : p.y) ?? sigma2hat
+probeLL = logLik(probeMu, probeSig2)
+
+// === TWO-PANEL LAYOUT (use ${probe} directly on the left) ===
+md`${tex`\textbf{Probe: } \mu = ${probeMu.toFixed(2)},\ \sigma^2 = ${probeSig2.toFixed(3)}\ \Rightarrow\ \ell = ${probeLL.toFixed(2)}`}`
+
+html`<div style="display:flex; gap:20px; align-items:flex-start;">${probe}${rightPanel}</div>`
+
+
+// ============== Right panel: histogram + Normal pdf ==============
+
+normalPdf = (x, mu, sig2) => {
+  return (1 / Math.sqrt(2 * Math.PI * sig2)) * Math.exp(-((x - mu) ** 2) / (2 * sig2));
+}
+
+xExtent = d3.extent(X)
+xPad = 3 * Math.sqrt(probeSig2)
+xMin = Math.min(xExtent[0], probeMu - xPad)
+xMax = Math.max(xExtent[1], probeMu + xPad)
+
+numPts = 200
+xs = d3.range(numPts).map(i => xMin + (i / (numPts - 1)) * (xMax - xMin))
+
+binWidth = (xMax - xMin) / bins
+pdfYs = xs.map(x => n * binWidth * normalPdf(x, probeMu, probeSig2)) // area-match curve to histogram counts
+
+rightPanel = Plot.plot({
+  width: plotW,
+  height: plotH,
+  marginLeft: marginLeft,
+  marginBottom: marginBottom,
+  x: { label: "x", domain: [xMin, xMax] },
+  y: { label: "count" },
+  marks: [
+    Plot.rectY(X, Plot.binX({ y: "count" }, { x: d => d, thresholds: bins, fillOpacity: 0.2 })),
+    Plot.line(xs.map((x, i) => ({ x, y: pdfYs[i] })), { x: "x", y: "y", strokeWidth: 2 }),
+    Plot.ruleX([probeMu], { stroke: "currentColor", strokeDasharray: "4,3", title: `μ = ${probeMu.toFixed(2)}` })
+  ]
+})
+
+// ============== Layout + readout ==============
+
+md`${tex`\textbf{Probe: } \mu = ${probeMu.toFixed(2)},\ \sigma^2 = ${probeSig2.toFixed(3)}\quad \Rightarrow\quad \ell = ${probeLL.toFixed(2)}`}`
+
+html`<div style="display:flex; gap:20px; align-items:flex-start;">${leftPanel}${rightPanel}</div>`
+
+md`${tex`\textbf{Tip: } \text{Click or drag on the left plot to move the probe. Use the controls above to resimulate data or change the grid.}`}`
+
+
+``` 
+-->
+
+
+<!-- 
+```{ojs}
+//| echo: false
+// --- Data & stats ---
+X = {
+  resim;
+  const m = trueMu, s = trueSigma;
+  const out = new Array(n);
+  for (let i = 0; i < n; i += 2) {
+    const u = Math.random(), v = Math.random();
+    const R = Math.sqrt(-2 * Math.log(u)), T = 2 * Math.PI * v;
+    const z0 = R * Math.cos(T), z1 = R * Math.sin(T);
+    out[i] = m + s * z0;
+    if (i + 1 < n) out[i + 1] = m + s * z1;
+  }
+  return out;
+};
+
+xbar = d3.mean(X);
+S = d3.sum(X, x => (x - xbar) ** 2);
+
+logLik = (mu, sigma2) => {
+  const ss = d3.sum(X, x => (x - mu) ** 2);
+  return -0.5 * n * Math.log(2 * Math.PI * sigma2) - 0.5 * ss / sigma2;
+};
+
+muhat = xbar;
+sigma2hat = S / n;
+
+// --- Grid for contours ---
+muGrid = d3.ticks(muhat - muHalfWidth, muhat + muHalfWidth, gridN);              // ✅ simpler count
+sig2Grid = d3.ticks(Math.max(0.05, sigma2hat / 20), sig2Max, gridN).filter(s => s > 0);
+
+LLgrid = {
+  const out = [];
+  for (const mu of muGrid) for (const s2 of sig2Grid) out.push({ mu, sig2: s2, ll: logLik(mu, s2) });
+  return out;
+};
+
+// --- Geometry ---
+plotW = 540;
+plotH = 420;
+marginTop = 20;
+marginRight = 20;
+marginBottom = 48;
+marginLeft = 56;
+innerW = plotW - marginLeft - marginRight;
+innerH = plotH - marginTop - marginBottom;
+
+// ✅ avoid .at(-1) for compatibility
+muDomain = [muGrid[0], muGrid[muGrid.length - 1]];
+sig2Domain = [sig2Grid[0], sig2Grid[sig2Grid.length - 1]];
+
+// sizes
+nx = muGrid.length;
+ny = sig2Grid.length;
+
+// edges so rects abut perfectly
+muEdges = {
+  const e = new Array(nx + 1);
+  for (let i = 0; i < nx - 1; ++i) e[i + 1] = 0.5 * (muGrid[i] + muGrid[i + 1]);
+  e[0]  = muGrid[0]    - (e[1] - muGrid[0]);
+  e[nx] = muGrid[nx-1] + (muGrid[nx-1] - e[nx-1]);
+  return e;
+};
+
+sig2Edges = {
+  const e = new Array(ny + 1);
+  for (let j = 0; j < ny - 1; ++j) e[j + 1] = 0.5 * (sig2Grid[j] + sig2Grid[j + 1]);
+  e[0]  = sig2Grid[0]    - (e[1] - sig2Grid[0]);
+  e[ny] = sig2Grid[ny-1] + (sig2Grid[ny-1] - e[ny-1]);
+  return e;
+};
+
+// heatmap cells (never null)
+heatCells = {
+  const out = [];
+  for (let j = 0; j < ny; ++j)
+    for (let i = 0; i < nx; ++i)
+      out.push({
+        x1: muEdges[i],  x2: muEdges[i+1],
+        y1: sig2Edges[j], y2: sig2Edges[j+1],
+        ll: logLik(muGrid[i], sig2Grid[j])
+      });
+  return out;
+};
+
+// thresholds for contours
+llMin = d3.min(heatCells, d => d.ll);
+llMax = d3.max(heatCells, d => d.ll);
+contourThresholds = d3.ticks(llMin, llMax, 10);
+
+// row-major z array for d3-contour
+llValuesRowMajor = {
+  const z = new Array(nx * ny);
+  for (let j = 0; j < ny; ++j) for (let i = 0; i < nx; ++i)
+    z[j * nx + i] = logLik(muGrid[i], sig2Grid[j]);
+  return z;
+};
+
+// contour polygons in grid coords
+contoursGeo = d3.contours()
+  .size([nx, ny])
+  .thresholds(contourThresholds)(llValuesRowMajor);
+
+leftPanel = {
+  const wrap = html`<div style="position:relative; width:${plotW}px; height:${plotH}px;"></div>`;
+
+  // Base plot: NO legend (so the hitbox aligns)
+  const base = Plot.plot({
+    width: plotW, height: plotH,
+    marginLeft: marginLeft, marginRight: marginRight, marginTop: marginTop, marginBottom: marginBottom,
+    x: { label: "μ", domain: muDomain },
+    y: { label: "σ²", domain: sig2Domain },
+    color: { scheme: "turbo", domain: [llMin, llMax], legend: false },
+    marks: [
+      // heatmap via explicit cell bounds
+    //   Plot.rect(heatCells, { x1: "x1", x2: "x2", y1: "y1", y2: "y2", fill: "ll", opacity: 0.9 }),
+      Plot.raster(LLgrd, {width: volcano.width, height: volcano.height})
+
+      // ✅ MLE dot: pass clean x/y data (no transform/x1/y1 confusion)
+      Plot.dot([{ x: muhat, y: sigma2hat }], { x: "x", y: "y", r: 5, stroke: "black", fill: "white" })
+    ]
+  });
+  wrap.append(base);
+
+//   // Contours overlay (d3-contour)
+//   {
+//     const sx = d3.scaleLinear().domain([0, nx - 1]).range([marginLeft, marginLeft + innerW]);
+//     const sy = d3.scaleLinear().domain([0, ny - 1]).range([marginTop,  marginTop  + innerH]);
+//     const proj = d3.geoTransform({ point(x, y) { this.stream.point(sx(x), sy(y)); } });
+//     const geoPath = d3.geoPath(proj);
+
+//     const svg = d3.create("svg")
+//       .attr("width", plotW)
+//       .attr("height", plotH)
+//       .style("position", "absolute")
+//       .style("inset", "0")
+//       .style("pointer-events", "none");
+
+//     svg.selectAll("path")
+//       .data(contoursGeo)
+//       .join("path")
+//       .attr("d", geoPath)
+//       .attr("fill", "none")
+//       .attr("stroke", "black")
+//       .attr("stroke-width", 1.1)
+//       .attr("opacity", 0.9);
+
+//     wrap.append(svg.node());
+//   }
+
+//   Crosshairs overlay
+  let cross = Plot.plot({
+    width: plotW, height: plotH,
+    marginLeft, marginRight, marginTop, marginBottom,
+    x: { domain: muDomain }, y: { domain: sig2Domain },
+    marks: [Plot.ruleX([muhat]), Plot.ruleY([sigma2hat])]
+  });
+  const crossLayer = html`<div style="position:absolute; inset:0; pointer-events:none; background: transparent;"></div>`;
+  crossLayer.append(cross);
+  wrap.append(crossLayer);
+
+  // Interactive hitbox aligned to inner plotting area
+  const hit = html`<div style="
+    position:absolute;
+    left:${marginLeft}px; top:${marginTop}px;
+    width:${innerW}px; height:${innerH}px;
+    cursor: crosshair; background: transparent;"></div>`;
+  hit.value = { x: muhat, y: sigma2hat };
+
+  function setFromEvent(evt) {
+    const r = hit.getBoundingClientRect();
+    const px = Math.min(Math.max(0, evt.clientX - r.left), innerW);
+    const py = Math.min(Math.max(0, evt.clientY - r.top), innerH);
+    const x = muDomain[0] + (px / innerW) * (muDomain[1] - muDomain[0]);
+    const y = sig2Domain[1] - (py / innerH) * (sig2Domain[1] - sig2Domain[0]); // invert y
+    hit.value = { x, y };
+
+    const newCross = Plot.plot({
+      width: plotW, height: plotH,
+      marginLeft, marginRight, marginTop, marginBottom,
+      x: { domain: muDomain }, y: { domain: sig2Domain },
+      marks: [Plot.ruleX([x]), Plot.ruleY([y])]
+    });
+    crossLayer.replaceChild(newCross, cross);
+    cross = newCross;
+
+    hit.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+  }
+  let dragging = false;
+  hit.addEventListener("pointerdown", (e) => { dragging = true; setFromEvent(e); hit.setPointerCapture(e.pointerId); });
+  hit.addEventListener("pointermove", (e) => { if (dragging) setFromEvent(e); });
+  hit.addEventListener("pointerup",   () => { dragging = false; });
+  hit.addEventListener("pointerleave",() => { dragging = false; });
+
+  wrap.append(hit);
+  wrap.hit = hit;
+  queueMicrotask(() => hit.dispatchEvent(new CustomEvent("input", { bubbles: true })));
+
+  return wrap;
+};
+
+// Read probe values reactively (no extra visible block)
+probeRaw = Generators.input(leftPanel.hit);
+probeMu   = (Array.isArray(probeRaw) ? probeRaw[0] : probeRaw?.x) ?? muhat;
+probeSig2 = (Array.isArray(probeRaw) ? probeRaw[1] : probeRaw?.y) ?? sigma2hat;
+probeLL   = logLik(probeMu, probeSig2);
+
+// --- Right panel ---
+normalPdf = (x, mu, sig2) => (1 / Math.sqrt(2 * Math.PI * sig2)) * Math.exp(-((x - mu) ** 2) / (2 * sig2));
+
+xExtent = d3.extent(X);
+xPad = 3 * Math.sqrt(probeSig2);
+xMin = Math.min(xExtent[0], probeMu - xPad);
+xMax = Math.max(xExtent[1], probeMu + xPad);
+
+numPts = 200;
+xs = d3.range(numPts).map(i => xMin + (i / (numPts - 1)) * (xMax - xMin));
+
+binWidth = (xMax - xMin) / bins;
+pdfYs = xs.map(x => n * binWidth * normalPdf(x, probeMu, probeSig2)); // scale pdf to counts
+
+rightPanel = Plot.plot({
+  width: plotW, height: plotH,
+  marginLeft: marginLeft, marginBottom: marginBottom,
+  x: { label: "x", domain: [xMin, xMax] },
+  y: { label: "count" },
+  marks: [
+    Plot.rectY(X, Plot.binX({ y: "count" }, { x: d => d, thresholds: bins, fillOpacity: 0.2 })),
+    Plot.line(xs.map((x, i) => ({ x, y: pdfYs[i] })), { x: "x", y: "y", strokeWidth: 2 }),
+    Plot.ruleX([probeMu], { stroke: "currentColor", strokeDasharray: "4,3" })
+  ]
+});
+
+// --- Single final layout output (only once; side-by-side) ---
+html`<div style="display:flex; gap:20px; align-items:flex-start;">
+  ${leftPanel}
+  <div>
+    <div style="margin-bottom:8px;">${md`${tex`\mathbf{Probe:}\ \mu=${probeMu.toFixed(2)},\ \sigma^2=${probeSig2.toFixed(3)}\ \Rightarrow\ \ell=${probeLL.toFixed(2)}`}`}</div>
+    ${rightPanel}
+  </div>
+</div>`
+
+``` 
+-->

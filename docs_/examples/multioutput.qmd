@@ -1,0 +1,181 @@
+## Multioutput GPs {.scrollable}
+
+```{python}
+#| echo: False
+import jax
+from jax import config
+import jax.numpy as jnp
+from jax import Array
+import numpy as np
+config.update("jax_enable_x64", True)  # do this at the very top
+
+import matplotlib.pyplot as plt
+
+from tueplots import bundles, figsizes
+
+plt.rcParams.update(bundles.probnum2025())
+plt.rcParams.update(figsizes.probnum2025_half())
+
+# plt.rcParams["figure.figsize"] = (5, 3)
+plt.rcParams["text.usetex"] = True
+plt.rcParams["font.family"] = "serif"
+plt.rcParams["font.serif"] = ["Computer Modern Roman"]  # matches LaTeX default
+
+
+from gaussed.domains import Euclidean
+from gaussed.domains.index import IndexDomain
+from gaussed.codomains import Codomain
+
+from gaussed.gp.gp_ops.base import KernelSpec, FunSpec
+from gaussed.gp.gp_ops.point_eval import Eval
+from gaussed.gp.gp_ops.partial import Partial
+from gaussed.gp.gp_ops.grad import Grad
+from gaussed.gp.gp_ops.affine import Affine
+from gaussed.gp.gp_ops.weighted_eval import WeightedEval
+from gaussed.gp.gp_ops.probe import Probe, ProbeStack, as_stack
+from gaussed.gp.gp_ops.linearise import Linearise
+
+from gaussed.gp.kernels.rbf import RBFKernel, RBFParams
+from gaussed.gp.kernels.matern import MaternKernel, MaternParams
+from gaussed.gp.kernels.imq import IMQKernel, IMQParams
+from gaussed.gp.kernels.delta import DeltaKernel, DeltaParams
+from gaussed.gp.kernels.stacked import StackedKernel
+from gaussed.gp.kernels.coregional import CoregionParams, CoregionalKernel
+from gaussed.gp.means import ZeroMeanFun
+from gaussed.gp.base import GP, PosteriorGP
+
+from gaussed.model import GPModel
+from gaussed.utils.shape_helpers import pack_ev2mat
+
+from gaussed.backends.base import ExactBackend
+from gaussed.backends.solvers.linear_solver import SolverFns
+from gaussed.backends.solvers.cholesky import (
+    chol_solve_hook,
+    chol_sqrt_hook,
+    chol_logdet_hook,
+)
+from gaussed.backends.solvers.svd import svd_solve_hook, svd_sqrt_hook, svd_logdet_hook
+
+from gaussed.likelihoods.gaussian import GaussianLikelihood
+from gaussed.likelihoods.gaussian_noise import DiagonalNoise
+
+solver_fns = SolverFns(svd_solve_hook(), svd_sqrt_hook(), svd_logdet_hook())
+```
+
+`GaussED` natively supports *tensor valued* kernels. A common choice is an **intrinsic coregionalisation model** (ICM) kernel.
+
+### Coregional (ICM) Kernels
+Suppose
+
+$$ (f_1,\ldots, f_D)^\top \sim \mathcal{GP}(m, K), $$
+
+where $K$ is a matrix-valued kernel:
+$$ 
+K:\mathcal{X}\times\mathcal{X} \rightarrow \mathbb{R}^{D\times D}. 
+$$
+
+Takes form:
+
+$$
+ K(x,y) = \Sigma \, k(x,y). 
+$$
+
+
+#### Option 1: Hard Code
+
+```{python}
+domain   = Euclidean((1,))
+codomain = Codomain((2,))
+mean     = ZeroMeanFun(domain, codomain)
+
+# Kernel specification
+imq_params = IMQParams(lengthscale=jnp.array(0.5), amplitude=jnp.array(1.2), beta=jnp.array(0.5))
+imq_kernel = IMQKernel(imq_params)
+
+coreg_par = CoregionParams(imq_params, L_params = jnp.array([[1.0, 0.8], [0.8, 1.0]]))
+coreg_kernel = CoregionalKernel(imq_kernel, coreg_par)
+
+backend = ExactBackend(solverfns=solver_fns)
+
+# GP specification
+gp = GP(domain, codomain, mean, coreg_kernel, backend)
+gpmodel = GPModel(gp=gp, likelihood=GaussianLikelihood())
+
+ks = gp.kernel_spec()
+
+x, y = jnp.array([[1.0]]), jnp.array([[2.0]])
+Kxy = coreg_kernel(x, y, domain)
+
+print("=== Coregionalised IMQ Kernel Evaluation ===")
+print(f"Inputs: x = {x.ravel()[0]:.2f}, y = {y.ravel()[0]:.2f}")
+print("Kernel Matrix (ICM):")
+print(Kxy)
+
+```
+
+
+This is an ICM kernel with $\Sigma = L^\top L$, where 
+
+```{python}
+mat = coreg_kernel._make_L()
+
+print("=== Coregionalised Kernel Structure ===")
+print("L (coregionalisation matrix):")
+print(mat)
+print("\nΣ = Lᵀ L (implied covariance across outputs)")
+```
+
+#### Option 2: ICM via `Affine` Operator
+
+Alternatively, view an ICM as a **linear mixing** of independent outputs. Starting with an independent multi-output GP:
+
+$$
+f(x)=\begin{pmatrix}f_1(x)\\ \vdots \\ f_D(x)\end{pmatrix}, 
+\qquad 
+\operatorname{cov}\!\big[f(x),f(y)\big] \;=\; \mathrm{diag}\!\big(k_1(x,y),\ldots,k_D(x,y)\big),
+$$
+
+apply a linear map $L\in\mathbb{R}^{D\times D}$:
+$$
+f_{\text{ICM}}(x) \;=\; L\,f(x).
+$$
+
+Then
+
+$$
+\operatorname{cov}\!\big[f_{\text{ICM}}(x),f_{\text{ICM}}(y)\big]
+\;=\; L\;\mathrm{diag}\!\big(k_1(x,y),\ldots,k_D(x,y)\big)\;L^\top.
+$$
+
+```{python}
+domain   = Euclidean((1,))
+codomain = Codomain((2,))
+mean     = ZeroMeanFun(domain, codomain)
+
+# Independent outputs: block-diagonal kernel diag(k, k)
+stacked_kern = StackedKernel((imq_kernel, imq_kernel))
+
+backend = ExactBackend(solverfns=solver_fns)
+gp = GP(domain, codomain, mean, stacked_kern, backend)
+gpmodel = GPModel(gp=gp, likelihood=GaussianLikelihood())
+
+ks = gp.kernel_spec()
+
+# --- Probes: Affine ∘ Eval ---
+aff_op = Affine(mat)                  # f ↦ L f + c   (here c=0 internally)
+eval_x = Eval(x)
+eval_y = Eval(y)
+
+probe_x = Probe((aff_op,), eval_x)
+probe_y = Probe((aff_op,), eval_y)
+
+# Kernel via operator calculus
+K_icm_affine = probe_x.kernel(probe_y, ks, None)  # shape (2, 2)
+
+print("=== ICM via Affine Operator ===")
+print(f"Inputs: x = {x.ravel()[0]:.2f}, y = {y.ravel()[0]:.2f}")
+print("\nICM kernel from operator construction:")
+print(K_icm_affine)
+```
+
+They produce the same output!
