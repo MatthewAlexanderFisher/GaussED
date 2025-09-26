@@ -1,6 +1,0 @@
----
-title: "GaussED"
----
-
-Welcome to the GaussED documentation. See the [Tutorials](examples/index.qmd) to get started.
-
