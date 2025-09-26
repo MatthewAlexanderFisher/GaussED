@@ -598,22 +598,65 @@ We are often interested not in $f$ itself, but in **linear functionals** of $f$,
 * integrals $\int f(x)\,\mathrm{d}\mu(x)$,
 * or any linear combination thereof.
 
-Let $\delta$ denote a linear functional acting on $f$. Then
+Let $\delta$ denote a (bounded) linear functional acting on $f$. Then
 
 $$
-\delta(f) = \int_\mathcal{X} L(x)\, f(x)\, \mathrm{d}x,
+\delta(f) = \int_\mathcal{X} L(x)\, f(x)\, \mathrm{d}x.
 $$
 
-for some tensor-valued kernel $L(x)$.
+### Joint Gaussian law
 
-Since Gaussian processes are closed under linear maps,
+The pair $\big(f, \delta(f)\big)$ is jointly Gaussian with
+
+* Mean functions:
+
+  $$
+  \mathbb{E}[f(x)] = m(x), 
+  \qquad 
+  \mathbb{E}[\delta(f)] = \delta(m) \;=\; \int L(x)\, m(x)\,\mathrm{d}x,
+  $$
+
+* Covariances:
+
+  $$
+  \mathrm{Cov}[f(x), f(x')] = k(x,x'),
+  $$
+
+  $$
+  \mathrm{Cov}[f(x), \delta(f)] 
+  = \int L(x')\, k(x, x')\, \mathrm{d}x',
+  $$
+
+  $$
+  \mathrm{Cov}[\delta(f), \delta(f')] 
+  = \iint L(x)\, k(x, x')\, L(x')^\top \,\mathrm{d}x\,\mathrm{d}x'.
+  $$
+
+### Conditioning rule
+
+Now, conditioning $f$ on observing $\delta(f)$, the posterior is again a GP:
 
 $$
-f \;\big|\; \delta(f) = \delta(\mathbf{f})
+f \,\big|\, \delta(f) \;=\; y
 \;\;\sim\;\; \mathcal{GP}\big(m_\delta,\, k_\delta\big),
 $$
 
-where the conditional mean and covariance are obtained by the standard Gaussian conditioning rules.
+with mean and covariance
+
+$$
+m_\delta(x) 
+= m(x) 
++ \mathrm{Cov}[f(x), \delta(f)] \,\mathrm{Var}[\delta(f)]^{-1} \, \big(y - \delta(m)\big),
+$$
+
+$$
+k_\delta(x,x') 
+= k(x,x') 
+- \mathrm{Cov}[f(x), \delta(f)] \,\mathrm{Var}[\delta(f)]^{-1} \,\mathrm{Cov}[\delta(f), f(x')].
+$$
+
+This is just the **standard Gaussian conditioning formula**, where the “observation” is the random variable $\delta(f)$.
+
 
 ### Linear Operators
 
